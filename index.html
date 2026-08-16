@@ -730,7 +730,7 @@
     var controller = new AbortController();
     var t = setTimeout(function(){ controller.abort(); }, 5000);
     try{
-      var url = "https://api-adresse.data.gouv.fr/search/?q=" + encodeURIComponent(query) + "&limit=5&autocomplete=1";
+      var url = "https://data.geopf.fr/geocodage/search?q=" + encodeURIComponent(query) + "&limit=5&autocomplete=1";
       var res = await fetch(url, { signal: controller.signal });
       if(!res.ok) return [];
       var data = await res.json();
@@ -945,7 +945,7 @@
       return fetch(url, opts).finally(function(){ clearTimeout(t); });
     }
     async function geocode(address){
-      var url = "https://api-adresse.data.gouv.fr/search/?q=" + encodeURIComponent(address) + "&limit=1";
+      var url = "https://data.geopf.fr/geocodage/search?q=" + encodeURIComponent(address) + "&limit=1";
       var postcodeMatch = address.match(/\b(\d{5})\b/);
       if(postcodeMatch) url += "&postcode=" + postcodeMatch[1];
       var response;
