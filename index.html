@@ -262,15 +262,15 @@
       <option value="">— Choisir un trajet enregistré —</option>
     </select>
 
-    <label for="mFrom">Point de départ</label>
+    <label for="mFrom">Point de départ <span style="font-weight:400; text-transform:none; letter-spacing:0;">(adresse ou coordonnées GPS)</span></label>
     <div class="autocomplete-wrap">
-      <input type="text" id="mFrom" placeholder="Ex. 3 rue de la Paix, 72000 Le Mans" autocomplete="off">
+      <input type="text" id="mFrom" placeholder="Adresse, ou 48.00891, 0.18756" autocomplete="off">
       <div class="suggestions" id="mFromSuggestions" hidden></div>
     </div>
 
-    <label for="mTo">Point d'arrivée</label>
+    <label for="mTo">Point d'arrivée <span style="font-weight:400; text-transform:none; letter-spacing:0;">(adresse ou coordonnées GPS)</span></label>
     <div class="autocomplete-wrap">
-      <input type="text" id="mTo" placeholder="Ex. 12 avenue Foch, 49000 Angers" autocomplete="off">
+      <input type="text" id="mTo" placeholder="Adresse, ou 47.46370, -0.55290" autocomplete="off">
       <div class="suggestions" id="mToSuggestions" hidden></div>
     </div>
 
@@ -278,7 +278,7 @@
       <input type="number" id="mDistance" step="0.1" min="0" placeholder="Distance (km)">
       <button class="btn-calc" id="calcDistanceBtn">Calculer</button>
     </div>
-    <div class="calc-status" id="calcStatus">Saisissez les deux adresses puis touchez « Calculer » : l'app essaie d'abord un service de géocodage réel, avec repli automatique si indisponible. Chaque trajet saisi est mémorisé automatiquement pour la prochaine fois.</div>
+    <div class="calc-status" id="calcStatus">Adresse introuvable ? Dans Google Maps, appuyez longuement sur le point exact → les coordonnées GPS s'affichent en bas → collez-les ici (format 48.00891, 0.18756) à la place de l'adresse. Chaque trajet saisi est mémorisé automatiquement pour la prochaine fois.</div>
 
     <div class="checkbox-row">
       <input type="checkbox" id="mRoundTrip">
@@ -924,8 +924,21 @@
     }
   });
 
+  // Accepts coordinates pasted directly (e.g. copied from Google Maps: "48.00891, 0.18756"),
+  // which sidesteps address-database gaps entirely — Google Maps has full coverage via satellite
+  // imagery even where BAN/OSM don't have every house number indexed.
+  function parseCoords(text){
+    var m = (text||'').trim().match(/^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/);
+    if(!m) return null;
+    var lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+    if(lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat: lat, lon: lon };
+  }
+
   function resolveCity(address, coordKey){
     if(selectedCoords[coordKey]) return selectedCoords[coordKey];
+    var coords = parseCoords(address);
+    if(coords) return coords;
     var m = fuzzyCityMatch(address);
     return m ? { lat:m.lat, lon:m.lon } : null;
   }
@@ -944,15 +957,78 @@
       opts.signal = controller.signal;
       return fetch(url, opts).finally(function(){ clearTimeout(t); });
     }
-    async function geocode(address){
-      var url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address);
+    async function osmQuery(params){
+      var url = "https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=fr&" + params;
       var response;
       try{ response = await withTimeout(url, { headers: { "Accept": "application/json" } }); }
       catch(e){ throw new Error("OpenStreetMap indisponible"); }
       if(!response.ok) throw new Error("OpenStreetMap HTTP " + response.status);
-      var data = await response.json();
-      if(!data || data.length===0) throw new Error("Adresse introuvable sur OpenStreetMap : " + address);
-      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name };
+      return await response.json();
+    }
+    function parseStreetAddress(address){
+      // "33 rue des Mouettes, 72000 Le Mans" -> {housenumber:'33', street:'rue des Mouettes', postcode:'72000', city:'Le Mans'}
+      var postcodeMatch = address.match(/\b(\d{5})\b/);
+      var parts = address.split(',');
+      var streetPart = parts[0].trim();
+      var cityPart = parts.length > 1 ? parts[parts.length-1].trim() : null;
+      if(cityPart && postcodeMatch) cityPart = cityPart.replace(postcodeMatch[1], '').trim();
+
+      if(!cityPart){
+        // No comma (Lucas's usual style, e.g. "33 rue des mouettes Le Mans") — detect a known city name at the end instead.
+        var normalized = normalize(address);
+        var bestMatch = null;
+        CITIES_NORM.forEach(function(c){
+          if(normalized.length - normalized.lastIndexOf(c.norm) === c.norm.length && normalized.indexOf(c.norm) > 0){
+            if(!bestMatch || c.norm.length > bestMatch.norm.length) bestMatch = c;
+          }
+        });
+        if(bestMatch){
+          cityPart = bestMatch.name;
+          var idx = address.toLowerCase().lastIndexOf(bestMatch.norm.replace(/[^a-z ]/g,''));
+          streetPart = (idx > 0 ? address.slice(0, idx) : streetPart).replace(new RegExp(bestMatch.name,'i'),'').trim();
+        }
+      }
+
+      var numMatch = streetPart.match(/^\s*(\d+\s*(?:bis|ter)?)\s*(.+)$/i);
+      return {
+        housenumber: numMatch ? numMatch[1].trim() : null,
+        street: (numMatch ? numMatch[2] : streetPart).replace(/\b\d{5}\b/,'').trim(),
+        postcode: postcodeMatch ? postcodeMatch[1] : null,
+        city: cityPart
+      };
+    }
+    async function geocode(address){
+      var coords = parseCoords(address);
+      if(coords) return { lat: coords.lat, lon: coords.lon, label: coords.lat.toFixed(5)+', '+coords.lon.toFixed(5)+' (coordonnées GPS)', approximate:false };
+
+      // Attempt 1: free-form, exactly as typed
+      var data = await osmQuery("limit=3&q=" + encodeURIComponent(address));
+      if(data && data.length>0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, approximate:false };
+
+      // Attempt 2: free-form without punctuation (Nominatim's tokenizer sometimes matches better without commas)
+      var noPunct = address.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+      if(noPunct !== address){
+        data = await osmQuery("limit=3&q=" + encodeURIComponent(noPunct));
+        if(data && data.length>0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, approximate:false };
+      }
+
+      // Attempt 3: structured query — separate fields use different matching logic than free-form
+      var parsed = parseStreetAddress(address);
+      if(parsed.street && parsed.city){
+        var structParams = "limit=3&street=" + encodeURIComponent((parsed.housenumber?parsed.housenumber+' ':'')+parsed.street) + "&city=" + encodeURIComponent(parsed.city);
+        if(parsed.postcode) structParams += "&postalcode=" + parsed.postcode;
+        data = await osmQuery(structParams);
+        if(data && data.length>0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, approximate:false };
+      }
+
+      // Attempt 4: street level only (house number dropped) — last resort before giving up
+      var withoutNumber = address.replace(/^\s*\d+\s*(bis|ter)?[,\s]+/i, '').trim();
+      if(withoutNumber && withoutNumber !== address){
+        data = await osmQuery("limit=3&q=" + encodeURIComponent(withoutNumber));
+        if(data && data.length>0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, approximate:true };
+      }
+
+      throw new Error("Adresse introuvable sur OpenStreetMap : " + address);
     }
     var p1 = await geocode(from);
     var p2 = await geocode(to);
@@ -963,7 +1039,7 @@
     if(!routeRes.ok) throw new Error("Service d'itinéraire HTTP " + routeRes.status);
     var routeData = await routeRes.json();
     if(!routeData.routes || routeData.routes.length===0) throw new Error("Itinéraire introuvable");
-    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label };
+    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label, approx1: p1.approximate, approx2: p2.approximate };
   }
 
   // ---------- AI web-search estimate (works specifically inside the Claude artifact preview) ----------
@@ -1041,8 +1117,9 @@
     try{
       var real = await fetchDistanceKmReal(from, to);
       document.getElementById('mDistance').value = real.km.toFixed(1);
-      status.style.color = 'var(--green)';
-      status.textContent = real.km.toFixed(1) + ' km — ' + real.label1 + ' → ' + real.label2 + '. Vérifiez que ce sont bien les bonnes adresses ci-dessus.';
+      var approxNote = (real.approx1 || real.approx2) ? ' (niveau rue, numéro exact non trouvé — vérifiez la précision)' : '';
+      status.style.color = (real.approx1 || real.approx2) ? 'var(--gold)' : 'var(--green)';
+      status.textContent = real.km.toFixed(1) + ' km' + approxNote + ' — ' + real.label1 + ' → ' + real.label2 + '. Vérifiez que ce sont bien les bonnes adresses ci-dessus.';
       updateTotalPreview();
       btn.disabled = false;
       return;
