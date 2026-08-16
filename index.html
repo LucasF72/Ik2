@@ -930,7 +930,7 @@
     return m ? { lat:m.lat, lon:m.lon } : null;
   }
 
-  // ---------- REAL geocoding + routing (BAN + OSRM) ----------
+  // ---------- REAL geocoding + routing (official French address database, with OpenStreetMap as fallback) ----------
   // This was blocked when running inside the Claude artifact preview sandbox (confirmed
   // with two independent providers). It is kept here because it should work normally once
   // this page is hosted on its own domain (e.g. Vercel) and opened in a regular browser —
@@ -944,18 +944,33 @@
       opts.signal = controller.signal;
       return fetch(url, opts).finally(function(){ clearTimeout(t); });
     }
-    async function geocode(address){
+    async function geocodeOfficial(address){
       var url = "https://data.geopf.fr/geocodage/search?q=" + encodeURIComponent(address) + "&limit=1";
       var postcodeMatch = address.match(/\b(\d{5})\b/);
       if(postcodeMatch) url += "&postcode=" + postcodeMatch[1];
       var response;
-      try{ response = await withTimeout(url); }
-      catch(e){ throw new Error("Service d'adresses indisponible"); }
-      if(!response.ok) throw new Error("Service d'adresses HTTP " + response.status);
+      try{ response = await withTimeout(url); }catch(e){ return null; }
+      if(!response.ok) return null;
       var data = await response.json();
-      if(!data.features || data.features.length===0) throw new Error("Adresse introuvable : " + address);
+      if(!data.features || data.features.length===0) return null;
       var f = data.features[0];
-      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: f.properties.label, score: f.properties.score };
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: f.properties.label, score: f.properties.score, source:'officielle' };
+    }
+    async function geocodeOSM(address){
+      var url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address);
+      var response;
+      try{ response = await withTimeout(url, { headers: { "Accept": "application/json" } }); }catch(e){ return null; }
+      if(!response.ok) return null;
+      var data = await response.json();
+      if(!data || data.length===0) return null;
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, score: undefined, source:'OpenStreetMap' };
+    }
+    async function geocode(address){
+      var r = await geocodeOfficial(address);
+      if(r) return r;
+      r = await geocodeOSM(address);
+      if(r) return r;
+      throw new Error("Adresse introuvable (base officielle et OpenStreetMap) : " + address);
     }
     var p1 = await geocode(from);
     var p2 = await geocode(to);
@@ -966,7 +981,7 @@
     if(!routeRes.ok) throw new Error("Service d'itinéraire HTTP " + routeRes.status);
     var routeData = await routeRes.json();
     if(!routeData.routes || routeData.routes.length===0) throw new Error("Itinéraire introuvable");
-    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label, score1: p1.score, score2: p2.score };
+    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label, score1: p1.score, score2: p2.score, source1: p1.source, source2: p2.source };
   }
 
   // ---------- AI web-search estimate (works specifically inside the Claude artifact preview) ----------
@@ -1045,8 +1060,9 @@
       var real = await fetchDistanceKmReal(from, to);
       document.getElementById('mDistance').value = real.km.toFixed(1);
       var lowConfidence = (real.score1 !== undefined && real.score1 < 0.5) || (real.score2 !== undefined && real.score2 < 0.5);
+      var sourceNote = (real.source1==='OpenStreetMap' || real.source2==='OpenStreetMap') ? ' (via OpenStreetMap pour l\u2019adresse non trouvée dans la base officielle)' : '';
       status.style.color = lowConfidence ? 'var(--gold)' : 'var(--green)';
-      status.textContent = (lowConfidence ? '⚠ ' : '') + real.km.toFixed(1) + ' km — ' + real.label1 + ' → ' + real.label2 + '.'
+      status.textContent = (lowConfidence ? '⚠ ' : '') + real.km.toFixed(1) + ' km — ' + real.label1 + ' → ' + real.label2 + '.' + sourceNote
         + (lowConfidence ? ' Correspondance incertaine : vérifiez que ce sont les bonnes adresses.' : ' Vérifiez que ce sont bien les bonnes adresses ci-dessus.');
       updateTotalPreview();
       btn.disabled = false;
