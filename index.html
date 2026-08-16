@@ -944,33 +944,15 @@
       opts.signal = controller.signal;
       return fetch(url, opts).finally(function(){ clearTimeout(t); });
     }
-    async function geocodeOfficial(address){
-      var url = "https://data.geopf.fr/geocodage/search?q=" + encodeURIComponent(address) + "&limit=1";
-      var postcodeMatch = address.match(/\b(\d{5})\b/);
-      if(postcodeMatch) url += "&postcode=" + postcodeMatch[1];
-      var response;
-      try{ response = await withTimeout(url); }catch(e){ return null; }
-      if(!response.ok) return null;
-      var data = await response.json();
-      if(!data.features || data.features.length===0) return null;
-      var f = data.features[0];
-      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: f.properties.label, score: f.properties.score, source:'officielle' };
-    }
-    async function geocodeOSM(address){
+    async function geocode(address){
       var url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address);
       var response;
-      try{ response = await withTimeout(url, { headers: { "Accept": "application/json" } }); }catch(e){ return null; }
-      if(!response.ok) return null;
+      try{ response = await withTimeout(url, { headers: { "Accept": "application/json" } }); }
+      catch(e){ throw new Error("OpenStreetMap indisponible"); }
+      if(!response.ok) throw new Error("OpenStreetMap HTTP " + response.status);
       var data = await response.json();
-      if(!data || data.length===0) return null;
-      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, score: undefined, source:'OpenStreetMap' };
-    }
-    async function geocode(address){
-      var r = await geocodeOfficial(address);
-      if(r) return r;
-      r = await geocodeOSM(address);
-      if(r) return r;
-      throw new Error("Adresse introuvable (base officielle et OpenStreetMap) : " + address);
+      if(!data || data.length===0) throw new Error("Adresse introuvable sur OpenStreetMap : " + address);
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name };
     }
     var p1 = await geocode(from);
     var p2 = await geocode(to);
@@ -981,7 +963,7 @@
     if(!routeRes.ok) throw new Error("Service d'itinéraire HTTP " + routeRes.status);
     var routeData = await routeRes.json();
     if(!routeData.routes || routeData.routes.length===0) throw new Error("Itinéraire introuvable");
-    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label, score1: p1.score, score2: p2.score, source1: p1.source, source2: p2.source };
+    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label };
   }
 
   // ---------- AI web-search estimate (works specifically inside the Claude artifact preview) ----------
@@ -1059,11 +1041,8 @@
     try{
       var real = await fetchDistanceKmReal(from, to);
       document.getElementById('mDistance').value = real.km.toFixed(1);
-      var lowConfidence = (real.score1 !== undefined && real.score1 < 0.5) || (real.score2 !== undefined && real.score2 < 0.5);
-      var sourceNote = (real.source1==='OpenStreetMap' || real.source2==='OpenStreetMap') ? ' (via OpenStreetMap pour l\u2019adresse non trouvée dans la base officielle)' : '';
-      status.style.color = lowConfidence ? 'var(--gold)' : 'var(--green)';
-      status.textContent = (lowConfidence ? '⚠ ' : '') + real.km.toFixed(1) + ' km — ' + real.label1 + ' → ' + real.label2 + '.' + sourceNote
-        + (lowConfidence ? ' Correspondance incertaine : vérifiez que ce sont les bonnes adresses.' : ' Vérifiez que ce sont bien les bonnes adresses ci-dessus.');
+      status.style.color = 'var(--green)';
+      status.textContent = real.km.toFixed(1) + ' km — ' + real.label1 + ' → ' + real.label2 + '. Vérifiez que ce sont bien les bonnes adresses ci-dessus.';
       updateTotalPreview();
       btn.disabled = false;
       return;
