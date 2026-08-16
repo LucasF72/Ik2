@@ -681,7 +681,7 @@
     toast('Trajet enregistré');
   });
 
-  // ---------- ADDRESS SUGGESTIONS: personal history (every address you've ever typed) + local city database ----------
+  // ---------- ADDRESS SUGGESTIONS: personal history + local city database (instant) + live BAN autocomplete (real addresses, when reachable) ----------
   function getKnownAddresses(){
     var seen = {};
     var list = [];
@@ -700,7 +700,7 @@
     return list;
   }
 
-  function searchAddressSuggestions(query){
+  function localSuggestions(query){
     var q = normalize(query);
     if(q.length < 2) return [];
     var seen = {};
@@ -717,18 +717,66 @@
     return results;
   }
 
+  function debounce(fn, delay){
+    var timer;
+    return function(){
+      var args = arguments;
+      clearTimeout(timer);
+      timer = setTimeout(function(){ fn.apply(null, args); }, delay);
+    };
+  }
+
+  async function fetchBanSuggestions(query){
+    var controller = new AbortController();
+    var t = setTimeout(function(){ controller.abort(); }, 5000);
+    try{
+      var url = "https://api-adresse.data.gouv.fr/search/?q=" + encodeURIComponent(query) + "&limit=5&autocomplete=1";
+      var res = await fetch(url, { signal: controller.signal });
+      if(!res.ok) return [];
+      var data = await res.json();
+      return (data.features||[]).map(function(f){
+        return { name: f.properties.label, own:false, live:true, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+      });
+    }catch(e){
+      return [];
+    }finally{
+      clearTimeout(t);
+    }
+  }
+
   function setupAutocomplete(inputId, suggestionsId, coordKey){
     var input = document.getElementById(inputId);
     var box = document.getElementById(suggestionsId);
+    var requestToken = 0;
 
-    function showSuggestions(){
-      var results = searchAddressSuggestions(input.value);
+    function renderSuggestions(results){
       if(results.length===0){ box.hidden = true; box.innerHTML=''; return; }
       box.innerHTML = results.map(function(r,i){
-        return '<div class="suggestion-item" data-idx="'+i+'">'+(r.own?'★ ':'')+escapeHtml(r.name)+'</div>';
+        var mark = r.live ? '📍 ' : (r.own ? '★ ' : '');
+        return '<div class="suggestion-item" data-idx="'+i+'">'+mark+escapeHtml(r.name)+'</div>';
       }).join('');
       box._results = results;
       box.hidden = false;
+    }
+
+    var fetchLive = debounce(async function(query, token){
+      var live = await fetchBanSuggestions(query);
+      if(token !== requestToken) return; // input changed since this request started — discard stale results
+      if(live.length===0) return; // keep whatever local suggestions are already shown
+      var local = localSuggestions(query).filter(function(r){ return r.own; }); // keep personal history on top
+      var seen = {}; var merged = [];
+      local.concat(live).forEach(function(r){
+        var k = normalize(r.name);
+        if(!seen[k]){ seen[k]=true; merged.push(r); }
+      });
+      renderSuggestions(merged.slice(0,7));
+    }, 350);
+
+    function showSuggestions(){
+      requestToken++;
+      var results = localSuggestions(input.value);
+      renderSuggestions(results);
+      if(input.value.trim().length>=3) fetchLive(input.value, requestToken);
     }
 
     input.addEventListener('input', function(){
@@ -747,7 +795,7 @@
       var r = box._results[parseInt(item.dataset.idx)];
       if(!r) return;
       input.value = r.name;
-      selectedCoords[coordKey] = r.own ? null : { lat:r.lat, lon:r.lon };
+      selectedCoords[coordKey] = (r.own) ? null : { lat:r.lat, lon:r.lon };
       box.hidden = true;
       checkKnownRouteAutoFill();
     });
@@ -898,6 +946,8 @@
     }
     async function geocode(address){
       var url = "https://api-adresse.data.gouv.fr/search/?q=" + encodeURIComponent(address) + "&limit=1";
+      var postcodeMatch = address.match(/\b(\d{5})\b/);
+      if(postcodeMatch) url += "&postcode=" + postcodeMatch[1];
       var response;
       try{ response = await withTimeout(url); }
       catch(e){ throw new Error("Service d'adresses indisponible"); }
@@ -905,7 +955,7 @@
       var data = await response.json();
       if(!data.features || data.features.length===0) throw new Error("Adresse introuvable : " + address);
       var f = data.features[0];
-      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: f.properties.label };
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: f.properties.label, score: f.properties.score };
     }
     var p1 = await geocode(from);
     var p2 = await geocode(to);
@@ -916,7 +966,7 @@
     if(!routeRes.ok) throw new Error("Service d'itinéraire HTTP " + routeRes.status);
     var routeData = await routeRes.json();
     if(!routeData.routes || routeData.routes.length===0) throw new Error("Itinéraire introuvable");
-    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label };
+    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label, score1: p1.score, score2: p2.score };
   }
 
   // ---------- AI web-search estimate (works specifically inside the Claude artifact preview) ----------
@@ -994,8 +1044,10 @@
     try{
       var real = await fetchDistanceKmReal(from, to);
       document.getElementById('mDistance').value = real.km.toFixed(1);
-      status.style.color = 'var(--green)';
-      status.textContent = 'Distance routière réelle : ' + real.km.toFixed(1) + ' km (aller simple).';
+      var lowConfidence = (real.score1 !== undefined && real.score1 < 0.5) || (real.score2 !== undefined && real.score2 < 0.5);
+      status.style.color = lowConfidence ? 'var(--gold)' : 'var(--green)';
+      status.textContent = (lowConfidence ? '⚠ ' : '') + real.km.toFixed(1) + ' km — ' + real.label1 + ' → ' + real.label2 + '.'
+        + (lowConfidence ? ' Correspondance incertaine : vérifiez que ce sont les bonnes adresses.' : ' Vérifiez que ce sont bien les bonnes adresses ci-dessus.');
       updateTotalPreview();
       btn.disabled = false;
       return;
