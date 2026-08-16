@@ -251,8 +251,22 @@
     <label for="mAssociate">Associé</label>
     <select id="mAssociate"></select>
 
-    <label for="mDate">Date</label>
-    <input type="date" id="mDate">
+    <div class="checkbox-row">
+      <input type="checkbox" id="mIsRecurring">
+      <label for="mIsRecurring">Trajet récurrent (plage de dates, ex. tous les lundis pendant 6 mois)</label>
+    </div>
+
+    <div id="dateSingleWrap">
+      <label for="mDate">Date</label>
+      <input type="date" id="mDate">
+    </div>
+
+    <div id="dateRangeWrap" hidden>
+      <label for="mDateStart">Du</label>
+      <input type="date" id="mDateStart">
+      <label for="mDateEnd">Au</label>
+      <input type="date" id="mDateEnd">
+    </div>
 
     <label for="mComment">Motif du trajet</label>
     <input type="text" id="mComment" placeholder="Ex. Visite client, RDV agence, prospection...">
@@ -285,7 +299,7 @@
       <label for="mRoundTrip">Aller-retour (double la distance)</label>
     </div>
 
-    <label for="mCount">Nombre de trajets effectués</label>
+    <label for="mCount" id="mCountLabel">Nombre de trajets effectués</label>
     <input type="number" id="mCount" min="1" step="1" value="1">
 
     <div class="total-preview">
@@ -563,7 +577,9 @@
       return;
     }
     list.innerHTML = trips.map(function(t){
-      var dateFmt = new Date(t.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'});
+      var dateFmt = t.dateEnd
+        ? new Date(t.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'}) + ' → ' + new Date(t.dateEnd).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'})
+        : new Date(t.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'});
       return '<div class="card trip-card">'
         + '<div class="trip-top"><div class="trip-date">'+dateFmt+'</div><div class="trip-total mono">'+t.totalKm.toFixed(1)+' km</div></div>'
         + '<div class="trip-tags"><span class="tag tag-vehicle">'+escapeHtml(vehicleName(t.vehicleId))+'</span><span class="tag tag-associate">'+escapeHtml(associateName(t.associateId))+'</span></div>'
@@ -591,6 +607,16 @@
   var selectedCoords = { from:null, to:null };
   var backdrop = document.getElementById('modalBackdrop');
 
+  function applyRecurringToggle(){
+    var recurring = document.getElementById('mIsRecurring').checked;
+    document.getElementById('dateSingleWrap').hidden = recurring;
+    document.getElementById('dateRangeWrap').hidden = !recurring;
+    document.getElementById('mCountLabel').textContent = recurring
+      ? 'Nombre de trajets effectués durant cette période'
+      : 'Nombre de trajets effectués';
+  }
+  document.getElementById('mIsRecurring').addEventListener('change', applyRecurringToggle);
+
   function openTripModal(tripId){
     if(state.vehicles.length===0){ toast("Ajoutez d'abord un véhicule"); showView('vehicules'); return; }
     if(state.associates.length===0){ toast("Ajoutez d'abord un associé"); showView('associes'); return; }
@@ -609,7 +635,10 @@
       var t = state.trips.find(function(x){ return x.id===tripId; });
       document.getElementById('mVehicle').value = t.vehicleId;
       document.getElementById('mAssociate').value = t.associateId;
+      document.getElementById('mIsRecurring').checked = !!t.dateEnd;
       document.getElementById('mDate').value = t.date;
+      document.getElementById('mDateStart').value = t.date;
+      document.getElementById('mDateEnd').value = t.dateEnd || '';
       document.getElementById('mComment').value = t.comment || '';
       document.getElementById('mFrom').value = t.from;
       document.getElementById('mTo').value = t.to;
@@ -617,7 +646,11 @@
       document.getElementById('mRoundTrip').checked = t.roundTrip;
       document.getElementById('mCount').value = t.count;
     } else {
-      document.getElementById('mDate').value = new Date().toISOString().slice(0,10);
+      var today = new Date().toISOString().slice(0,10);
+      document.getElementById('mIsRecurring').checked = false;
+      document.getElementById('mDate').value = today;
+      document.getElementById('mDateStart').value = today;
+      document.getElementById('mDateEnd').value = '';
       document.getElementById('mComment').value = '';
       document.getElementById('mFrom').value = '';
       document.getElementById('mTo').value = '';
@@ -625,6 +658,7 @@
       document.getElementById('mRoundTrip').checked = false;
       document.getElementById('mCount').value = 1;
     }
+    applyRecurringToggle();
     updateTotalPreview();
     backdrop.hidden = false;
   }
@@ -648,7 +682,14 @@
   document.getElementById('saveTripBtn').addEventListener('click', function(){
     var vehicleId = document.getElementById('mVehicle').value;
     var associateId = document.getElementById('mAssociate').value;
-    var date = document.getElementById('mDate').value;
+    var isRecurring = document.getElementById('mIsRecurring').checked;
+    var date, dateEnd = null;
+    if(isRecurring){
+      date = document.getElementById('mDateStart').value;
+      dateEnd = document.getElementById('mDateEnd').value;
+    } else {
+      date = document.getElementById('mDate').value;
+    }
     var comment = document.getElementById('mComment').value.trim();
     var from = document.getElementById('mFrom').value.trim();
     var to = document.getElementById('mTo').value.trim();
@@ -657,12 +698,16 @@
     var count = parseInt(document.getElementById('mCount').value) || 1;
 
     if(!vehicleId || !associateId){ toast('Choisissez un véhicule et un associé'); return; }
-    if(!date){ toast('Indiquez une date'); return; }
+    if(!date){ toast(isRecurring ? 'Indiquez la date de début' : 'Indiquez une date'); return; }
+    if(isRecurring){
+      if(!dateEnd){ toast('Indiquez la date de fin'); return; }
+      if(dateEnd < date){ toast('La date de fin doit être après la date de début'); return; }
+    }
     if(!from || !to){ toast("Indiquez le départ et l'arrivée"); return; }
     if(!distanceKm || distanceKm<=0){ toast('Indiquez une distance valide'); return; }
 
     var totalKm = distanceKm * (roundTrip?2:1) * count;
-    var trip = { id: editingTripId || uid(), vehicleId:vehicleId, associateId:associateId, date:date, comment:comment, from:from, to:to, distanceKm:distanceKm, roundTrip:roundTrip, count:count, totalKm:totalKm };
+    var trip = { id: editingTripId || uid(), vehicleId:vehicleId, associateId:associateId, date:date, dateEnd: isRecurring ? dateEnd : null, comment:comment, from:from, to:to, distanceKm:distanceKm, roundTrip:roundTrip, count:count, totalKm:totalKm };
 
     rememberRoute(from, to, distanceKm);
 
@@ -957,6 +1002,7 @@
       opts.signal = controller.signal;
       return fetch(url, opts).finally(function(){ clearTimeout(t); });
     }
+    function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
     async function osmQuery(params){
       var url = "https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=fr&" + params;
       var response;
@@ -965,66 +1011,20 @@
       if(!response.ok) throw new Error("OpenStreetMap HTTP " + response.status);
       return await response.json();
     }
-    function parseStreetAddress(address){
-      // "33 rue des Mouettes, 72000 Le Mans" -> {housenumber:'33', street:'rue des Mouettes', postcode:'72000', city:'Le Mans'}
-      var postcodeMatch = address.match(/\b(\d{5})\b/);
-      var parts = address.split(',');
-      var streetPart = parts[0].trim();
-      var cityPart = parts.length > 1 ? parts[parts.length-1].trim() : null;
-      if(cityPart && postcodeMatch) cityPart = cityPart.replace(postcodeMatch[1], '').trim();
-
-      if(!cityPart){
-        // No comma (Lucas's usual style, e.g. "33 rue des mouettes Le Mans") — detect a known city name at the end instead.
-        var normalized = normalize(address);
-        var bestMatch = null;
-        CITIES_NORM.forEach(function(c){
-          if(normalized.length - normalized.lastIndexOf(c.norm) === c.norm.length && normalized.indexOf(c.norm) > 0){
-            if(!bestMatch || c.norm.length > bestMatch.norm.length) bestMatch = c;
-          }
-        });
-        if(bestMatch){
-          cityPart = bestMatch.name;
-          var idx = address.toLowerCase().lastIndexOf(bestMatch.norm.replace(/[^a-z ]/g,''));
-          streetPart = (idx > 0 ? address.slice(0, idx) : streetPart).replace(new RegExp(bestMatch.name,'i'),'').trim();
-        }
-      }
-
-      var numMatch = streetPart.match(/^\s*(\d+\s*(?:bis|ter)?)\s*(.+)$/i);
-      return {
-        housenumber: numMatch ? numMatch[1].trim() : null,
-        street: (numMatch ? numMatch[2] : streetPart).replace(/\b\d{5}\b/,'').trim(),
-        postcode: postcodeMatch ? postcodeMatch[1] : null,
-        city: cityPart
-      };
-    }
     async function geocode(address){
       var coords = parseCoords(address);
       if(coords) return { lat: coords.lat, lon: coords.lon, label: coords.lat.toFixed(5)+', '+coords.lon.toFixed(5)+' (coordonnées GPS)', approximate:false };
 
-      // Attempt 1: free-form, exactly as typed
-      var data = await osmQuery("limit=3&q=" + encodeURIComponent(address));
+      // Single attempt, exactly as typed — kept minimal to respect OpenStreetMap's strict rate limit (1 req/sec).
+      var data = await osmQuery("limit=1&q=" + encodeURIComponent(address));
       if(data && data.length>0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, approximate:false };
 
-      // Attempt 2: free-form without punctuation (Nominatim's tokenizer sometimes matches better without commas)
-      var noPunct = address.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
-      if(noPunct !== address){
-        data = await osmQuery("limit=3&q=" + encodeURIComponent(noPunct));
-        if(data && data.length>0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, approximate:false };
-      }
+      await sleep(1100); // stay under OpenStreetMap's rate limit before retrying
 
-      // Attempt 3: structured query — separate fields use different matching logic than free-form
-      var parsed = parseStreetAddress(address);
-      if(parsed.street && parsed.city){
-        var structParams = "limit=3&street=" + encodeURIComponent((parsed.housenumber?parsed.housenumber+' ':'')+parsed.street) + "&city=" + encodeURIComponent(parsed.city);
-        if(parsed.postcode) structParams += "&postalcode=" + parsed.postcode;
-        data = await osmQuery(structParams);
-        if(data && data.length>0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, approximate:false };
-      }
-
-      // Attempt 4: street level only (house number dropped) — last resort before giving up
+      // Fallback: street level only (house number dropped) — often better covered than individual numbers.
       var withoutNumber = address.replace(/^\s*\d+\s*(bis|ter)?[,\s]+/i, '').trim();
       if(withoutNumber && withoutNumber !== address){
-        data = await osmQuery("limit=3&q=" + encodeURIComponent(withoutNumber));
+        data = await osmQuery("limit=1&q=" + encodeURIComponent(withoutNumber));
         if(data && data.length>0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name, approximate:true };
       }
 
@@ -1225,7 +1225,9 @@
                             .sort(function(a,b){ return a.date.localeCompare(b.date); });
 
     var rows = trips.map(function(t){
-      var dateFmt = new Date(t.date).toLocaleDateString('fr-FR');
+      var dateFmt = t.dateEnd
+        ? new Date(t.date).toLocaleDateString('fr-FR') + ' au ' + new Date(t.dateEnd).toLocaleDateString('fr-FR')
+        : new Date(t.date).toLocaleDateString('fr-FR');
       return '<tr>'
         + '<td>'+dateFmt+'</td>'
         + '<td>'+escapeHtml(associateName(t.associateId))+'</td>'
