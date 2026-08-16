@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Indemnités kilométriques</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBF8F2;
+    --paper-dim:#F3EFE3;
+    --ink:#1C2B45;
+    --ink-light:#5B6785;
+    --gold:#B9902F;
+    --gold-soft:#E9D9AE;
+    --card:#FFFFFF;
+    --border:#E4DDC9;
+    --green:#3F6B4A;
+    --green-soft:#E4EEE3;
+    --red:#A6432E;
+    --red-soft:#F3E3DE;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--paper-dim); color:var(--ink); font-family:'Inter',sans-serif; overflow-x:hidden; width:100%; touch-action:pan-y;}
+  body{display:flex; justify-content:center;}
+  #app{width:100%; max-width:480px; min-height:100vh; background:var(--paper); position:relative; display:flex; flex-direction:column; box-shadow:0 0 40px rgba(28,43,69,0.08); overflow-x:hidden; touch-action:pan-y;}
+
+  h1,h2,h3{font-family:'Fraunces',serif; font-weight:600; color:var(--ink); margin:0;}
+  .mono{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums;}
+
+  .topbar{padding:20px 20px 16px; border-bottom:1px solid var(--border); background:var(--paper); position:sticky; top:0; z-index:20;}
+  .topbar .eyebrow{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--gold); font-weight:600; margin-bottom:4px;}
+  .topbar h1{font-size:22px;}
+  .topbar-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  select.year-select{border:1px solid var(--border); background:var(--card); color:var(--ink); font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; padding:7px 10px; border-radius:8px;}
+
+  main{flex:1; padding:16px 16px 100px; overflow-y:auto;}
+  section[hidden]{display:none !important;}
+
+  .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:10px;}
+  .trip-card{display:flex; flex-direction:column; gap:6px;}
+  .trip-top{display:flex; justify-content:space-between; align-items:flex-start;}
+  .trip-tags{display:flex; gap:6px; flex-wrap:wrap; font-size:11px;}
+  .tag{padding:3px 8px; border-radius:20px; font-weight:600;}
+  .tag-vehicle{background:var(--gold-soft); color:#6B5219;}
+  .tag-associate{background:var(--green-soft); color:var(--green);}
+  .trip-date{font-size:11px; color:var(--ink-light); font-family:'IBM Plex Mono',monospace;}
+  .trip-route{font-size:14px; margin:4px 0 2px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .trip-route .arrow{color:var(--gold); font-weight:700;}
+  .trip-comment{font-size:12px; color:var(--ink); font-style:italic; margin:2px 0;}
+  .trip-meta{font-size:12px; color:var(--ink-light);}
+  .trip-total{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:15px; color:var(--ink);}
+  .trip-actions{display:flex; gap:8px; margin-top:4px;}
+  .icon-btn{border:none; background:none; color:var(--ink-light); font-size:12px; font-family:'Inter',sans-serif; padding:2px 6px; cursor:pointer; text-decoration:underline;}
+  .icon-btn.danger{color:var(--red);}
+
+  .empty{text-align:center; padding:60px 20px; color:var(--ink-light);}
+  .empty h3{font-size:17px; margin-bottom:6px; color:var(--ink);}
+  .empty p{font-size:13px; line-height:1.5; margin:0 0 16px;}
+
+  .list-item{display:flex; justify-content:space-between; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px;}
+  .list-item .name{font-weight:600; font-size:14px;}
+  .list-item .sub{font-size:12px; color:var(--ink-light); font-family:'IBM Plex Mono',monospace;}
+  .add-form{display:flex; gap:8px; margin-bottom:16px;}
+  .add-form input{flex:1; min-width:0;}
+  .btn-add{background:var(--ink); color:var(--paper); border:none; border-radius:10px; padding:0 16px; font-weight:600; font-size:13px; cursor:pointer;}
+
+  input, select{width:100%; max-width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:10px; font-family:'Inter',sans-serif; font-size:16px; background:var(--card); color:var(--ink);}
+  input:focus, select:focus{outline:2px solid var(--gold-soft); border-color:var(--gold);}
+  label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-light); font-weight:600; display:block; margin:14px 0 5px;}
+  label:first-child{margin-top:0;}
+
+  .bottom-tabs{position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; background:var(--card); border-top:1px solid var(--border); display:flex; padding:8px 6px calc(8px + env(safe-area-inset-bottom)); z-index:30;}
+  .tab-btn{flex:1; background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 2px; color:var(--ink-light); font-family:'Inter',sans-serif; font-size:10px; font-weight:600; cursor:pointer;}
+  .tab-btn svg{width:20px; height:20px; stroke:var(--ink-light); fill:none; stroke-width:1.7;}
+  .tab-btn.active{color:var(--gold);}
+  .tab-btn.active svg{stroke:var(--gold);}
+
+  .fab{position:fixed; bottom:78px; right:16px; width:52px; height:52px; border-radius:50%; background:var(--ink); color:var(--paper); font-size:26px; line-height:1; border:none; box-shadow:0 6px 16px rgba(28,43,69,0.35); cursor:pointer; z-index:25; display:flex; align-items:center; justify-content:center;}
+
+  .filter-bar{display:flex; gap:8px; margin-bottom:14px;}
+  .filter-bar select{flex:1; min-width:0; font-size:12px; padding:8px 10px;}
+  .manage-routes-link{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; font-size:12px; color:var(--ink-light); margin-bottom:12px; cursor:pointer; font-weight:600;}
+  .manage-routes-link span{color:var(--gold); font-family:'IBM Plex Mono',monospace;}
+  .route-row{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px;}
+  .route-row .route-text{font-size:13px; margin-bottom:8px;}
+  .route-row .route-controls{display:flex; align-items:center; gap:8px;}
+  .route-row .route-controls input{flex:1; min-width:0;}
+  .route-row .route-controls span{font-size:12px; color:var(--ink-light); white-space:nowrap;}
+
+  .modal-backdrop{position:fixed; inset:0; background:rgba(28,43,69,0.45); z-index:40; display:flex; align-items:flex-end; justify-content:center;}
+  .modal-backdrop[hidden]{display:none;}
+  .modal-sheet{width:100%; max-width:480px; background:var(--paper); border-radius:20px 20px 0 0; padding:20px 20px calc(20px + env(safe-area-inset-bottom)); max-height:88vh; overflow-y:auto;}
+  .modal-sheet h2{font-size:19px; margin-bottom:14px;}
+  .autocomplete-wrap{position:relative;}
+  .suggestions{position:absolute; left:0; right:0; top:calc(100% + 4px); background:var(--card); border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 20px rgba(28,43,69,0.15); max-height:190px; overflow-y:auto; z-index:50;}
+  .suggestions[hidden]{display:none;}
+  .suggestion-item{padding:10px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--paper-dim);}
+  .suggestion-item:last-child{border-bottom:none;}
+  .suggestion-item:active{background:var(--paper-dim);}
+  .suggestion-empty{padding:10px 12px; font-size:12px; color:var(--ink-light);}
+  .distance-box{display:flex; align-items:center; gap:10px; margin-top:8px;}
+  .distance-box input{flex:1; min-width:0;}
+  .btn-calc{background:var(--gold); color:#fff; border:none; border-radius:10px; padding:10px 14px; font-size:12px; font-weight:700; white-space:nowrap; cursor:pointer;}
+  .btn-calc:disabled{opacity:.5;}
+  .btn-maps{display:flex; align-items:center; justify-content:center; gap:8px; background:var(--ink); color:var(--paper); text-decoration:none; border-radius:10px; padding:12px; font-size:13px; font-weight:600; margin-top:14px;}
+  .btn-maps svg{width:16px; height:16px; stroke:var(--gold-soft); fill:none; stroke-width:1.8; flex-shrink:0;}
+  .calc-status{font-size:11px; color:var(--ink-light); margin-top:4px; min-height:14px; line-height:1.4;}
+  .checkbox-row{display:flex; align-items:center; gap:8px; margin-top:14px;}
+  .checkbox-row input{width:18px; height:18px;}
+  .checkbox-row label{margin:0; text-transform:none; letter-spacing:0; font-weight:500; color:var(--ink); font-size:13px;}
+  .total-preview{margin-top:16px; padding:12px 14px; background:var(--ink); border-radius:12px; color:var(--paper); display:flex; justify-content:space-between; align-items:center;}
+  .total-preview .val{font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--gold-soft);}
+  .modal-actions{display:flex; gap:10px; margin-top:18px;}
+  .btn-primary{flex:2; background:var(--ink); color:var(--paper); border:none; border-radius:10px; padding:13px; font-weight:600; font-size:14px; cursor:pointer;}
+  .btn-secondary{flex:1; background:none; color:var(--ink-light); border:1px solid var(--border); border-radius:10px; padding:13px; font-weight:600; font-size:14px; cursor:pointer;}
+
+  .odometer-wrap{background:var(--ink); border-radius:16px; padding:20px; margin-bottom:16px;}
+  .odometer-label{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold-soft); font-weight:600; margin-bottom:10px;}
+  .odometer{display:flex; gap:3px;}
+  .odo-digit{background:#0F1A2E; border:1px solid #2A3B5C; border-radius:4px; width:30px; height:42px; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--gold); box-shadow:inset 0 2px 4px rgba(0,0,0,0.5);}
+  .odo-unit{align-self:flex-end; color:var(--gold-soft); font-size:12px; margin-left:8px; font-family:'IBM Plex Mono',monospace;}
+
+  .bilan-section-title{font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-light); font-weight:700; margin:20px 0 8px;}
+  .bilan-row{display:flex; justify-content:space-between; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px;}
+  .bilan-row .name{font-size:14px; font-weight:600;}
+  .bilan-row .km{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:15px; color:var(--gold);}
+  .bilan-bar-track{height:5px; background:var(--paper-dim); border-radius:4px; margin-top:6px; overflow:hidden;}
+  .bilan-bar-fill{height:100%; background:var(--gold);}
+
+  .export-btn{width:100%; background:var(--green); color:#fff; border:none; border-radius:12px; padding:14px; font-weight:700; font-size:14px; margin-top:22px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;}
+  .export-btn svg{width:16px; height:16px; stroke:#fff; fill:none; stroke-width:2;}
+
+  /* Printable report — hidden on screen, shown only when printing / saving as PDF */
+  #printReport{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #printReport, #printReport *{visibility:visible;}
+    #printReport{display:block; position:absolute; top:0; left:0; width:100%; padding:20px; font-family:'Inter',sans-serif; color:#000;}
+    #printReport h1{font-family:'Fraunces',serif; font-size:20px; margin:0 0 4px;}
+    #printReport .print-sub{font-size:12px; color:#555; margin-bottom:18px;}
+    #printReport table{width:100%; border-collapse:collapse; margin-bottom:18px; font-size:11px;}
+    #printReport th, #printReport td{border:1px solid #ccc; padding:5px 7px; text-align:left;}
+    #printReport th{background:#eee; font-weight:700;}
+    #printReport td.num, #printReport th.num{text-align:right; font-family:'IBM Plex Mono',monospace;}
+    #printReport h2{font-family:'Fraunces',serif; font-size:14px; margin:18px 0 8px;}
+    #printReport .grand-total{font-size:14px; font-weight:700; margin-top:10px;}
+  }
+
+  .toast{position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--paper); padding:10px 18px; border-radius:30px; font-size:12px; font-weight:600; z-index:60; opacity:0; pointer-events:none; transition:opacity .25s; max-width:88%; text-align:center;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="topbar-row">
+      <div>
+        <div class="eyebrow">Frais professionnels</div>
+        <h1>Indemnités km</h1>
+      </div>
+      <select id="globalYear" class="year-select mono"></select>
+    </div>
+  </div>
+
+  <main>
+
+    <section id="view-trajets">
+      <div class="manage-routes-link" id="manageRoutesLink">📍 <span id="knownRoutesCount">0</span> trajet(s) enregistré(s) — voir / modifier</div>
+      <div class="filter-bar">
+        <select id="filterVehicle"><option value="">Tous véhicules</option></select>
+        <select id="filterAssociate"><option value="">Tous associés</option></select>
+      </div>
+      <div id="tripsList"></div>
+    </section>
+
+    <section id="view-vehicules" hidden>
+      <div class="add-form">
+        <input id="newVehicleName" placeholder="Nom du véhicule (ex. Peugeot 308)">
+        <button class="btn-add" id="addVehicleBtn">Ajouter</button>
+      </div>
+      <div id="vehiclesList"></div>
+    </section>
+
+    <section id="view-associes" hidden>
+      <div class="add-form">
+        <input id="newAssociateName" placeholder="Nom de l'associé">
+        <button class="btn-add" id="addAssociateBtn">Ajouter</button>
+      </div>
+      <div id="associatesList"></div>
+    </section>
+
+    <section id="view-bilan" hidden>
+      <div class="odometer-wrap">
+        <div class="odometer-label">Total kilomètres — <span id="bilanYearLabel"></span></div>
+        <div style="display:flex; align-items:flex-end;">
+          <div class="odometer" id="odometerTotal"></div>
+          <div class="odo-unit">km</div>
+        </div>
+      </div>
+
+      <div class="bilan-section-title">Par associé</div>
+      <div id="bilanAssociates"></div>
+
+      <div class="bilan-section-title">Par véhicule</div>
+      <div id="bilanVehicles"></div>
+
+      <button class="export-btn" id="exportPdfBtn">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
+        Exporter en PDF (impression)
+      </button>
+    </section>
+
+  </main>
+
+  <div id="printReport"></div>
+
+  <button class="fab" id="fabAdd" title="Nouveau trajet">+</button>
+
+  <nav class="bottom-tabs">
+    <button class="tab-btn active" data-view="trajets">
+      <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+      Trajets
+    </button>
+    <button class="tab-btn" data-view="vehicules">
+      <svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 104 0M5 17V9l2-4h10l2 4v8m0 0a2 2 0 11-4 0M3 13h18"/></svg>
+      Véhicules
+    </button>
+    <button class="tab-btn" data-view="associes">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6M16 8a3 3 0 110 6M21 20c0-2.8-2-5-5-5.8"/></svg>
+      Associés
+    </button>
+    <button class="tab-btn" data-view="bilan">
+      <svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+      Bilan
+    </button>
+  </nav>
+
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop" hidden>
+  <div class="modal-sheet">
+    <h2 id="modalTitle">Nouveau trajet</h2>
+
+    <label for="mVehicle">Véhicule</label>
+    <select id="mVehicle"></select>
+
+    <label for="mAssociate">Associé</label>
+    <select id="mAssociate"></select>
+
+    <label for="mDate">Date</label>
+    <input type="date" id="mDate">
+
+    <label for="mComment">Motif du trajet</label>
+    <input type="text" id="mComment" placeholder="Ex. Visite client, RDV agence, prospection...">
+
+    <label for="mFavorite">Trajet favori (optionnel)</label>
+    <select id="mFavorite">
+      <option value="">— Choisir un trajet enregistré —</option>
+    </select>
+
+    <label for="mFrom">Point de départ</label>
+    <div class="autocomplete-wrap">
+      <input type="text" id="mFrom" placeholder="Ex. 3 rue de la Paix, 72000 Le Mans" autocomplete="off">
+      <div class="suggestions" id="mFromSuggestions" hidden></div>
+    </div>
+
+    <label for="mTo">Point d'arrivée</label>
+    <div class="autocomplete-wrap">
+      <input type="text" id="mTo" placeholder="Ex. 12 avenue Foch, 49000 Angers" autocomplete="off">
+      <div class="suggestions" id="mToSuggestions" hidden></div>
+    </div>
+
+    <div class="distance-box">
+      <input type="number" id="mDistance" step="0.1" min="0" placeholder="Distance (km)">
+      <button class="btn-calc" id="calcDistanceBtn">Calculer</button>
+    </div>
+    <div class="calc-status" id="calcStatus">Saisissez les deux adresses puis touchez « Calculer » : l'app essaie d'abord un service de géocodage réel, avec repli automatique si indisponible. Chaque trajet saisi est mémorisé automatiquement pour la prochaine fois.</div>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="mRoundTrip">
+      <label for="mRoundTrip">Aller-retour (double la distance)</label>
+    </div>
+
+    <label for="mCount">Nombre de trajets effectués</label>
+    <input type="number" id="mCount" min="1" step="1" value="1">
+
+    <div class="total-preview">
+      <span>Total pour cette entrée</span>
+      <span class="val" id="mTotalPreview">0 km</span>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" id="cancelModalBtn">Annuler</button>
+      <button class="btn-primary" id="saveTripBtn">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="routesModalBackdrop" hidden>
+  <div class="modal-sheet">
+    <h2>Trajets enregistrés</h2>
+    <div id="routesManageList"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="closeRoutesModalBtn" style="flex:1;">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- OFFLINE CITY DATABASE (~135 major French cities/prefectures) ----------
+  // No network call of any kind is used anywhere in this app. Coordinates are
+  // city-centre approximations; the computed distance is haversine x1.3 as a
+  // rough road-distance estimate, always editable by hand.
+  var CITIES = [["Paris", 48.8566, 2.3522], ["Marseille", 43.2965, 5.3698], ["Lyon", 45.764, 4.8357], ["Toulouse", 43.6047, 1.4442], ["Nice", 43.7102, 7.262], ["Nantes", 47.2184, -1.5536], ["Strasbourg", 48.5734, 7.7521], ["Montpellier", 43.6108, 3.8767], ["Bordeaux", 44.8378, -0.5792], ["Lille", 50.6292, 3.0573], ["Rennes", 48.1173, -1.6778], ["Reims", 49.2583, 4.0317], ["Le Havre", 49.4944, 0.1079], ["Saint-Étienne", 45.4397, 4.3872], ["Toulon", 43.1242, 5.928], ["Angers", 47.4784, -0.5632], ["Grenoble", 45.1885, 5.7245], ["Dijon", 47.322, 5.0415], ["Nîmes", 43.8367, 4.3601], ["Aix-en-Provence", 43.5297, 5.4474], ["Le Mans", 48.0061, 0.1996], ["Clermont-Ferrand", 45.7772, 3.087], ["Brest", 48.3904, -4.4861], ["Tours", 47.3941, 0.6848], ["Limoges", 45.8336, 1.2611], ["Amiens", 49.8942, 2.2957], ["Perpignan", 42.6886, 2.8948], ["Metz", 49.1193, 6.1757], ["Besançon", 47.238, 6.0243], ["Orléans", 47.9029, 1.9093], ["Mulhouse", 47.7508, 7.3359], ["Rouen", 49.4431, 1.0993], ["Caen", 49.1829, -0.3707], ["Nancy", 48.6921, 6.1844], ["Argenteuil", 48.9478, 2.2469], ["Saint-Denis", 48.9362, 2.3574], ["Montreuil", 48.8638, 2.4485], ["Roubaix", 50.6927, 3.1747], ["Tourcoing", 50.7236, 3.1611], ["Avignon", 43.9493, 4.8055], ["Nanterre", 48.8924, 2.2153], ["Créteil", 48.7904, 2.4553], ["Poitiers", 46.5802, 0.3404], ["Versailles", 48.8049, 2.1204], ["Colombes", 48.9231, 2.254], ["Courbevoie", 48.8975, 2.256], ["Vitry-sur-Seine", 48.7876, 2.393], ["La Rochelle", 46.1603, -1.1511], ["Pau", 43.2951, -0.3708], ["Cherbourg-en-Cotentin", 49.6337, -1.6222], ["Calais", 50.9513, 1.8587], ["Antibes", 43.5804, 7.1251], ["Béziers", 43.3444, 3.2158], ["Colmar", 48.0794, 7.3585], ["Drancy", 48.9256, 2.4453], ["Ajaccio", 41.9192, 8.7386], ["Bourges", 47.081, 2.3987], ["Mérignac", 44.8398, -0.6321], ["Saint-Nazaire", 47.2733, -2.2137], ["Quimper", 47.996, -4.0972], ["Valence", 44.9334, 4.8924], ["Villeurbanne", 45.7667, 4.8794], ["Cannes", 43.5528, 7.0174], ["Troyes", 48.2973, 4.0744], ["Chambéry", 45.5646, 5.9178], ["Niort", 46.3239, -0.4587], ["Lorient", 47.7482, -3.3667], ["Beauvais", 49.4295, 2.081], ["La Seyne-sur-Mer", 43.1, 5.883], ["Bayonne", 43.4933, -1.4748], ["Cergy", 49.0367, 2.0768], ["Chalon-sur-Saône", 46.7806, 4.8528], ["Vannes", 47.6582, -2.7603], ["Arles", 43.6768, 4.628], ["Saint-Malo", 48.6493, -2.0257], ["Évreux", 49.0269, 1.1509], ["Douai", 50.3714, 3.0797], ["Blois", 47.5861, 1.3359], ["Charleville-Mézières", 49.7728, 4.72], ["Chartres", 48.4439, 1.4894], ["Laval", 48.0698, -0.7669], ["Annecy", 45.8992, 6.1294], ["Belfort", 47.6379, 6.8629], ["Angoulême", 45.6484, 0.156], ["Le Puy-en-Velay", 45.043, 3.885], ["Digne-les-Bains", 44.0917, 6.2356], ["Gap", 44.5594, 6.0786], ["Guéret", 46.1701, 1.8683], ["Rodez", 44.3506, 2.573], ["Auch", 43.6465, 0.5859], ["Foix", 42.9647, 1.6053], ["Cahors", 44.4479, 1.4342], ["Mende", 44.5183, 3.5006], ["Privas", 44.7352, 4.5978], ["Mâcon", 46.3069, 4.8283], ["Nevers", 46.9896, 3.159], ["Alençon", 48.4319, 0.0925], ["Épinal", 48.1735, 6.4497], ["Vesoul", 47.6236, 6.1541], ["Lons-le-Saunier", 46.6743, 5.554], ["Bourg-en-Bresse", 46.2058, 5.2258], ["Moulins", 46.5654, 3.3348], ["Tulle", 45.2647, 1.7714], ["Périgueux", 45.1848, 0.7213], ["Agen", 44.2049, 0.6212], ["Albi", 43.9298, 2.148], ["Montauban", 44.0181, 1.3533], ["Auxerre", 47.7982, 3.573], ["Chaumont", 48.1113, 5.1401], ["Saint-Lô", 49.1147, -1.0844], ["Guingamp", 48.5619, -3.1508], ["Saint-Brieuc", 48.5142, -2.7653], ["Châteauroux", 46.8106, 1.6916], ["Bar-le-Duc", 48.7706, 5.1608], ["Châlons-en-Champagne", 48.9575, 4.3646], ["Mont-de-Marsan", 43.8905, -0.4981], ["La Roche-sur-Yon", 46.6705, -1.4267], ["Évry-Courcouronnes", 48.6288, 2.4297], ["Bobigny", 48.908, 2.439], ["Melun", 48.5389, 2.6598], ["Tarbes", 43.2328, 0.0781], ["Carcassonne", 43.213, 2.3491], ["Aurillac", 44.9291, 2.4444], ["Bastia", 42.7028, 9.4508], ["Dunkerque", 51.0344, 2.3768], ["Compiègne", 49.4179, 2.8261], ["Cholet", 47.0596, -0.8792], ["Boulogne-Billancourt", 48.8352, 2.241], ["Brive-la-Gaillarde", 45.159, 1.5335], ["Vitré", 48.1236, -1.2094], ["Sablé-sur-Sarthe", 47.8375, -0.3345], ["La Flèche", 47.6979, -0.0761], ["Mayenne", 48.3009, -0.6169], ["La Ferté-Bernard", 48.1897, 0.662], ["Mamers", 48.3517, 0.3712]];
+
+  function normalize(s){
+    return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  }
+  var CITIES_NORM = CITIES.map(function(c){ return { name:c[0], lat:c[1], lon:c[2], norm:normalize(c[0]) }; });
+
+  function searchCities(query){
+    var q = normalize(query);
+    if(q.length < 2) return [];
+    var starts = CITIES_NORM.filter(function(c){ return c.norm.indexOf(q)===0; });
+    var contains = CITIES_NORM.filter(function(c){ return c.norm.indexOf(q)>0; });
+    return starts.concat(contains).slice(0,6);
+  }
+  function exactCityMatch(query){
+    var q = normalize(query);
+    for(var i=0;i<CITIES_NORM.length;i++){ if(CITIES_NORM[i].norm===q) return CITIES_NORM[i]; }
+    return null;
+  }
+  function haversineKm(lat1,lon1,lat2,lon2){
+    var R = 6371;
+    var toRad = function(d){ return d * Math.PI/180; };
+    var dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // ---------- STORAGE (tries window.storage, falls back to localStorage, never throws) ----------
+  var STORAGE_KEY = "app-state";
+  var storageBackend = null; // 'window' | 'local' | 'none'
+
+  async function detectStorageBackend(){
+    try{
+      if(window.storage && typeof window.storage.set === 'function'){
+        await window.storage.set(STORAGE_KEY+'-probe', '1', false);
+        storageBackend = 'window';
+        return;
+      }
+    }catch(e){}
+    try{
+      localStorage.setItem(STORAGE_KEY+'-probe', '1');
+      storageBackend = 'local';
+      return;
+    }catch(e){}
+    storageBackend = 'none';
+  }
+
+  async function storageRead(){
+    if(storageBackend==='window'){
+      try{
+        var res = await window.storage.get(STORAGE_KEY, false);
+        return res ? res.value : null;
+      }catch(e){ return null; }
+    }
+    if(storageBackend==='local'){
+      try{ return localStorage.getItem(STORAGE_KEY); }catch(e){ return null; }
+    }
+    return null;
+  }
+  async function storageWrite(value){
+    if(storageBackend==='window'){
+      try{ await window.storage.set(STORAGE_KEY, value, false); return true; }catch(e){ return false; }
+    }
+    if(storageBackend==='local'){
+      try{ localStorage.setItem(STORAGE_KEY, value); return true; }catch(e){ return false; }
+    }
+    return false;
+  }
+
+  var uid = function(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); };
+  function defaultState(){ return { vehicles: [], associates: [], trips: [], favorites: [] }; }
+  var state = defaultState();
+
+  async function loadState(){
+    var raw = await storageRead();
+    if(raw){
+      try{
+        var parsed = JSON.parse(raw);
+        if(!parsed.vehicles) parsed.vehicles = [];
+        if(!parsed.associates) parsed.associates = [];
+        if(!parsed.trips) parsed.trips = [];
+        if(!parsed.favorites) parsed.favorites = []; // backfill for data saved before this feature existed
+        return parsed;
+      }catch(e){}
+    }
+    return defaultState();
+  }
+  async function saveState(){
+    var ok = await storageWrite(JSON.stringify(state));
+    if(!ok) toast("Attention : la sauvegarde locale n'est pas disponible sur cet appareil, vos données ne seront pas conservées après fermeture.");
+  }
+
+  function toast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function(){ t.classList.remove('show'); }, 2800);
+  }
+
+  // ---------- NAVIGATION ----------
+  var views = ['trajets','vehicules','associes','bilan'];
+  function showView(name){
+    views.forEach(function(v){ document.getElementById('view-'+v).hidden = (v!==name); });
+    document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.view===name); });
+    document.getElementById('fabAdd').style.display = (name==='trajets') ? 'flex' : 'none';
+    if(name==='bilan') renderBilan();
+  }
+  document.querySelectorAll('.tab-btn').forEach(function(b){
+    b.addEventListener('click', function(){ showView(b.dataset.view); });
+  });
+
+  // ---------- YEAR HANDLING ----------
+  function yearsInData(){
+    var ys = new Set(state.trips.map(function(t){ return new Date(t.date).getFullYear(); }));
+    ys.add(new Date().getFullYear());
+    return Array.from(ys).sort(function(a,b){ return b-a; });
+  }
+  function populateYearSelect(){
+    var sel = document.getElementById('globalYear');
+    var current = sel.value || new Date().getFullYear().toString();
+    sel.innerHTML = '';
+    yearsInData().forEach(function(y){
+      var o = document.createElement('option');
+      o.value = y; o.textContent = y;
+      sel.appendChild(o);
+    });
+    if(Array.from(sel.options).some(function(o){ return o.value===current; })) sel.value = current;
+  }
+  document.getElementById('globalYear').addEventListener('change', function(){ renderTrips(); renderBilan(); });
+
+  // ---------- VEHICLES ----------
+  function renderVehicles(){
+    var list = document.getElementById('vehiclesList');
+    if(state.vehicles.length===0){
+      list.innerHTML = '<div class="empty"><h3>Aucun véhicule</h3><p>Ajoutez un véhicule ci-dessus pour pouvoir déclarer un trajet.</p></div>';
+    } else {
+      list.innerHTML = state.vehicles.map(function(v){
+        var km = state.trips.filter(function(t){ return t.vehicleId===v.id; }).reduce(function(s,t){ return s+t.totalKm; },0);
+        return '<div class="list-item"><div><div class="name">'+escapeHtml(v.name)+'</div><div class="sub">'+km.toFixed(1)+' km au total</div></div><button class="icon-btn danger" data-del-vehicle="'+v.id+'">Supprimer</button></div>';
+      }).join('');
+    }
+    refreshSelects();
+  }
+  document.getElementById('addVehicleBtn').addEventListener('click', function(){
+    var input = document.getElementById('newVehicleName');
+    var name = input.value.trim();
+    if(!name){ toast("Indiquez un nom de véhicule"); return; }
+    state.vehicles.push({id:uid(), name:name});
+    saveState(); input.value=''; renderVehicles();
+  });
+  document.getElementById('vehiclesList').addEventListener('click', function(e){
+    var id = e.target.getAttribute('data-del-vehicle');
+    if(id){
+      if(state.trips.some(function(t){ return t.vehicleId===id; })){
+        if(!confirm('Ce véhicule est utilisé dans des trajets enregistrés. Le supprimer quand même ?')) return;
+      }
+      state.vehicles = state.vehicles.filter(function(v){ return v.id!==id; });
+      saveState(); renderVehicles(); renderTrips();
+    }
+  });
+
+  // ---------- ASSOCIATES ----------
+  function renderAssociates(){
+    var list = document.getElementById('associatesList');
+    if(state.associates.length===0){
+      list.innerHTML = '<div class="empty"><h3>Aucun associé</h3><p>Ajoutez un associé ci-dessus pour pouvoir déclarer un trajet.</p></div>';
+    } else {
+      list.innerHTML = state.associates.map(function(a){
+        var km = state.trips.filter(function(t){ return t.associateId===a.id; }).reduce(function(s,t){ return s+t.totalKm; },0);
+        return '<div class="list-item"><div><div class="name">'+escapeHtml(a.name)+'</div><div class="sub">'+km.toFixed(1)+' km au total</div></div><button class="icon-btn danger" data-del-associate="'+a.id+'">Supprimer</button></div>';
+      }).join('');
+    }
+    refreshSelects();
+  }
+  document.getElementById('addAssociateBtn').addEventListener('click', function(){
+    var input = document.getElementById('newAssociateName');
+    var name = input.value.trim();
+    if(!name){ toast("Indiquez un nom d'associé"); return; }
+    state.associates.push({id:uid(), name:name});
+    saveState(); input.value=''; renderAssociates();
+  });
+  document.getElementById('associatesList').addEventListener('click', function(e){
+    var id = e.target.getAttribute('data-del-associate');
+    if(id){
+      if(state.trips.some(function(t){ return t.associateId===id; })){
+        if(!confirm('Cet associé est utilisé dans des trajets enregistrés. Le supprimer quand même ?')) return;
+      }
+      state.associates = state.associates.filter(function(a){ return a.id!==id; });
+      saveState(); renderAssociates(); renderTrips();
+    }
+  });
+
+  function refreshSelects(){
+    fillSelect(document.getElementById('filterVehicle'), state.vehicles, 'Tous véhicules', true);
+    fillSelect(document.getElementById('filterAssociate'), state.associates, 'Tous associés', true);
+    fillSelect(document.getElementById('mVehicle'), state.vehicles, null, false);
+    fillSelect(document.getElementById('mAssociate'), state.associates, null, false);
+  }
+  function fillSelect(sel, items, placeholder, keepValue){
+    var prev = sel.value;
+    sel.innerHTML = '';
+    if(placeholder){
+      var o0=document.createElement('option'); o0.value=''; o0.textContent=placeholder; sel.appendChild(o0);
+    }
+    items.forEach(function(it){
+      var o=document.createElement('option'); o.value=it.id; o.textContent=it.name; sel.appendChild(o);
+    });
+    if(keepValue && Array.from(sel.options).some(function(o){ return o.value===prev; })) sel.value=prev;
+  }
+  document.getElementById('filterVehicle').addEventListener('change', renderTrips);
+  document.getElementById('filterAssociate').addEventListener('change', renderTrips);
+
+  // ---------- TRIPS LIST ----------
+  function escapeHtml(s){
+    return (s||'').replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function vehicleName(id){ var v=state.vehicles.find(function(x){ return x.id===id; }); return v? v.name : '—'; }
+  function associateName(id){ var a=state.associates.find(function(x){ return x.id===id; }); return a? a.name : '—'; }
+  function currentYear(){ return document.getElementById('globalYear').value || new Date().getFullYear().toString(); }
+
+  function filteredTrips(){
+    var y = currentYear();
+    var fv = document.getElementById('filterVehicle').value;
+    var fa = document.getElementById('filterAssociate').value;
+    return state.trips.filter(function(t){
+      if(new Date(t.date).getFullYear().toString()!==y) return false;
+      if(fv && t.vehicleId!==fv) return false;
+      if(fa && t.associateId!==fa) return false;
+      return true;
+    }).sort(function(a,b){ return b.date.localeCompare(a.date); });
+  }
+
+  function renderTrips(){
+    var list = document.getElementById('tripsList');
+    var trips = filteredTrips();
+    if(trips.length===0){
+      list.innerHTML = "<div class=\"empty\"><h3>Aucun trajet pour l'instant</h3><p>Touchez le bouton + pour déclarer votre premier trajet de l'année.</p></div>";
+      return;
+    }
+    list.innerHTML = trips.map(function(t){
+      var dateFmt = new Date(t.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'});
+      return '<div class="card trip-card">'
+        + '<div class="trip-top"><div class="trip-date">'+dateFmt+'</div><div class="trip-total mono">'+t.totalKm.toFixed(1)+' km</div></div>'
+        + '<div class="trip-tags"><span class="tag tag-vehicle">'+escapeHtml(vehicleName(t.vehicleId))+'</span><span class="tag tag-associate">'+escapeHtml(associateName(t.associateId))+'</span></div>'
+        + '<div class="trip-route">'+escapeHtml(t.from)+' <span class="arrow">→</span> '+escapeHtml(t.to)+'</div>'
+        + (t.comment ? '<div class="trip-comment">'+escapeHtml(t.comment)+'</div>' : '')
+        + '<div class="trip-meta">'+t.distanceKm.toFixed(1)+' km '+(t.roundTrip? '× 2 (A/R)':'')+' × '+t.count+' trajet'+(t.count>1?'s':'')+'</div>'
+        + '<div class="trip-actions"><button class="icon-btn" data-edit="'+t.id+'">Modifier</button><button class="icon-btn danger" data-del="'+t.id+'">Supprimer</button></div>'
+        + '</div>';
+    }).join('');
+  }
+  document.getElementById('tripsList').addEventListener('click', function(e){
+    var editId = e.target.getAttribute('data-edit');
+    var delId = e.target.getAttribute('data-del');
+    if(editId) openTripModal(editId);
+    if(delId){
+      if(confirm('Supprimer ce trajet ?')){
+        state.trips = state.trips.filter(function(t){ return t.id!==delId; });
+        saveState(); renderTrips();
+      }
+    }
+  });
+
+  // ---------- MODAL: TRIP FORM ----------
+  var editingTripId = null;
+  var selectedCoords = { from:null, to:null };
+  var backdrop = document.getElementById('modalBackdrop');
+
+  function openTripModal(tripId){
+    if(state.vehicles.length===0){ toast("Ajoutez d'abord un véhicule"); showView('vehicules'); return; }
+    if(state.associates.length===0){ toast("Ajoutez d'abord un associé"); showView('associes'); return; }
+    editingTripId = tripId || null;
+    refreshSelects();
+    document.getElementById('modalTitle').textContent = tripId ? 'Modifier le trajet' : 'Nouveau trajet';
+    document.getElementById('calcStatus').style.color = 'var(--ink-light)';
+    document.getElementById('calcStatus').textContent = 'Choisissez une ville suggérée pour départ et arrivée, puis touchez « Calculer ». Sinon, saisissez la distance vous-même.';
+    selectedCoords.from = null; selectedCoords.to = null;
+    document.getElementById('mFromSuggestions').hidden = true;
+    document.getElementById('mToSuggestions').hidden = true;
+    renderFavoriteSelect();
+    document.getElementById('mFavorite').value = '';
+
+    if(tripId){
+      var t = state.trips.find(function(x){ return x.id===tripId; });
+      document.getElementById('mVehicle').value = t.vehicleId;
+      document.getElementById('mAssociate').value = t.associateId;
+      document.getElementById('mDate').value = t.date;
+      document.getElementById('mComment').value = t.comment || '';
+      document.getElementById('mFrom').value = t.from;
+      document.getElementById('mTo').value = t.to;
+      document.getElementById('mDistance').value = t.distanceKm;
+      document.getElementById('mRoundTrip').checked = t.roundTrip;
+      document.getElementById('mCount').value = t.count;
+    } else {
+      document.getElementById('mDate').value = new Date().toISOString().slice(0,10);
+      document.getElementById('mComment').value = '';
+      document.getElementById('mFrom').value = '';
+      document.getElementById('mTo').value = '';
+      document.getElementById('mDistance').value = '';
+      document.getElementById('mRoundTrip').checked = false;
+      document.getElementById('mCount').value = 1;
+    }
+    updateTotalPreview();
+    backdrop.hidden = false;
+  }
+  document.getElementById('cancelModalBtn').addEventListener('click', function(){ backdrop.hidden = true; });
+  document.getElementById('fabAdd').addEventListener('click', function(){ openTripModal(null); });
+
+  ['mDistance','mRoundTrip','mCount'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', updateTotalPreview);
+    document.getElementById(id).addEventListener('change', updateTotalPreview);
+  });
+  function computeTotal(){
+    var d = parseFloat(document.getElementById('mDistance').value) || 0;
+    var rt = document.getElementById('mRoundTrip').checked ? 2 : 1;
+    var c = parseInt(document.getElementById('mCount').value) || 1;
+    return d * rt * c;
+  }
+  function updateTotalPreview(){
+    document.getElementById('mTotalPreview').textContent = computeTotal().toFixed(1) + ' km';
+  }
+
+  document.getElementById('saveTripBtn').addEventListener('click', function(){
+    var vehicleId = document.getElementById('mVehicle').value;
+    var associateId = document.getElementById('mAssociate').value;
+    var date = document.getElementById('mDate').value;
+    var comment = document.getElementById('mComment').value.trim();
+    var from = document.getElementById('mFrom').value.trim();
+    var to = document.getElementById('mTo').value.trim();
+    var distanceKm = parseFloat(document.getElementById('mDistance').value);
+    var roundTrip = document.getElementById('mRoundTrip').checked;
+    var count = parseInt(document.getElementById('mCount').value) || 1;
+
+    if(!vehicleId || !associateId){ toast('Choisissez un véhicule et un associé'); return; }
+    if(!date){ toast('Indiquez une date'); return; }
+    if(!from || !to){ toast("Indiquez le départ et l'arrivée"); return; }
+    if(!distanceKm || distanceKm<=0){ toast('Indiquez une distance valide'); return; }
+
+    var totalKm = distanceKm * (roundTrip?2:1) * count;
+    var trip = { id: editingTripId || uid(), vehicleId:vehicleId, associateId:associateId, date:date, comment:comment, from:from, to:to, distanceKm:distanceKm, roundTrip:roundTrip, count:count, totalKm:totalKm };
+
+    rememberRoute(from, to, distanceKm);
+
+    if(editingTripId){
+      var idx = state.trips.findIndex(function(t){ return t.id===editingTripId; });
+      state.trips[idx] = trip;
+    } else {
+      state.trips.push(trip);
+    }
+    saveState();
+    backdrop.hidden = true;
+    populateYearSelect();
+    renderTrips();
+    renderVehicles();
+    renderAssociates();
+    toast('Trajet enregistré');
+  });
+
+  // ---------- ADDRESS SUGGESTIONS: personal history (every address you've ever typed) + local city database ----------
+  function getKnownAddresses(){
+    var seen = {};
+    var list = [];
+    state.trips.forEach(function(t){
+      [t.from, t.to].forEach(function(a){
+        var k = normalize(a);
+        if(a && !seen[k]){ seen[k]=true; list.push(a); }
+      });
+    });
+    state.favorites.forEach(function(f){
+      [f.from, f.to].forEach(function(a){
+        var k = normalize(a);
+        if(a && !seen[k]){ seen[k]=true; list.push(a); }
+      });
+    });
+    return list;
+  }
+
+  function searchAddressSuggestions(query){
+    var q = normalize(query);
+    if(q.length < 2) return [];
+    var seen = {};
+    var results = [];
+    getKnownAddresses().forEach(function(a){
+      if(results.length>=6) return;
+      if(normalize(a).indexOf(q)>=0){ var k=normalize(a); if(!seen[k]){ seen[k]=true; results.push({ name:a, own:true }); } }
+    });
+    searchCities(query).forEach(function(c){
+      if(results.length>=6) return;
+      var k = normalize(c.name);
+      if(!seen[k]){ seen[k]=true; results.push({ name:c.name, own:false, lat:c.lat, lon:c.lon }); }
+    });
+    return results;
+  }
+
+  function setupAutocomplete(inputId, suggestionsId, coordKey){
+    var input = document.getElementById(inputId);
+    var box = document.getElementById(suggestionsId);
+
+    function showSuggestions(){
+      var results = searchAddressSuggestions(input.value);
+      if(results.length===0){ box.hidden = true; box.innerHTML=''; return; }
+      box.innerHTML = results.map(function(r,i){
+        return '<div class="suggestion-item" data-idx="'+i+'">'+(r.own?'★ ':'')+escapeHtml(r.name)+'</div>';
+      }).join('');
+      box._results = results;
+      box.hidden = false;
+    }
+
+    input.addEventListener('input', function(){
+      selectedCoords[coordKey] = null;
+      showSuggestions();
+      checkKnownRouteAutoFill();
+    });
+    input.addEventListener('blur', function(){ checkKnownRouteAutoFill(); });
+    input.addEventListener('focus', function(){ if(input.value.length>=2) showSuggestions(); });
+    document.addEventListener('click', function(e){
+      if(!box.contains(e.target) && e.target!==input) box.hidden = true;
+    });
+    box.addEventListener('click', function(e){
+      var item = e.target.closest('.suggestion-item');
+      if(!item || !box._results) return;
+      var r = box._results[parseInt(item.dataset.idx)];
+      if(!r) return;
+      input.value = r.name;
+      selectedCoords[coordKey] = r.own ? null : { lat:r.lat, lon:r.lon };
+      box.hidden = true;
+      checkKnownRouteAutoFill();
+    });
+  }
+  setupAutocomplete('mFrom','mFromSuggestions','from');
+  setupAutocomplete('mTo','mToSuggestions','to');
+
+  function fuzzyCityMatch(address){
+    var q = normalize(address);
+    if(!q) return null;
+    var exact = exactCityMatch(address);
+    if(exact) return exact;
+    // look for a known city name appearing as a whole word inside the typed address
+    var found = null;
+    CITIES_NORM.forEach(function(c){
+      if(found) return;
+      var re = new RegExp('(^|[^a-z])'+c.norm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'([^a-z]|$)');
+      if(re.test(q)) found = c;
+    });
+    return found;
+  }
+
+  // ---------- KNOWN ROUTES: every trip/favorite is remembered automatically; retyping the same pair auto-fills the distance ----------
+
+  function favoriteKey(from, to){ return normalize(from) + '|' + normalize(to); }
+
+  function findKnownDistance(from, to){
+    var key = favoriteKey(from, to);
+    var fav = state.favorites.find(function(f){ return favoriteKey(f.from,f.to)===key; });
+    if(fav) return fav.distanceKm;
+    // fall back to the most recent past trip using this exact pair, in case it wasn't explicitly saved as a favorite
+    var candidates = state.trips.filter(function(t){ return favoriteKey(t.from,t.to)===key; }).sort(function(a,b){ return b.date.localeCompare(a.date); });
+    return candidates.length ? candidates[0].distanceKm : null;
+  }
+
+  function checkKnownRouteAutoFill(){
+    var from = document.getElementById('mFrom').value.trim();
+    var to = document.getElementById('mTo').value.trim();
+    if(!from || !to) return;
+    var known = findKnownDistance(from, to);
+    if(known === null) return;
+    document.getElementById('mDistance').value = known;
+    updateTotalPreview();
+    var status = document.getElementById('calcStatus');
+    status.style.color = 'var(--green)';
+    status.textContent = '✓ Trajet déjà connu — distance remplie automatiquement : ' + known.toFixed(1) + ' km.';
+  }
+
+  function renderFavoriteSelect(){
+    var sel = document.getElementById('mFavorite');
+    sel.innerHTML = '<option value="">— Choisir un trajet enregistré —</option>';
+    state.favorites.slice().sort(function(a,b){ return a.from.localeCompare(b.from); }).forEach(function(f){
+      var o = document.createElement('option');
+      o.value = f.id;
+      o.textContent = f.from + ' → ' + f.to + ' (' + f.distanceKm.toFixed(1) + ' km)';
+      sel.appendChild(o);
+    });
+  }
+  document.getElementById('mFavorite').addEventListener('change', function(){
+    var favId = this.value;
+    var fav = state.favorites.find(function(f){ return f.id===favId; });
+    if(!fav) return;
+    document.getElementById('mFrom').value = fav.from;
+    document.getElementById('mTo').value = fav.to;
+    document.getElementById('mDistance').value = fav.distanceKm;
+    updateTotalPreview();
+    document.getElementById('calcStatus').style.color = 'var(--green)';
+    document.getElementById('calcStatus').textContent = 'Trajet favori chargé.';
+  });
+
+  // Every confirmed trip is remembered automatically as a known route for next time — no checkbox needed.
+  function rememberRoute(from, to, distanceKm){
+    var key = favoriteKey(from, to);
+    var existing = state.favorites.find(function(f){ return favoriteKey(f.from,f.to)===key; });
+    if(existing){ existing.distanceKm = distanceKm; existing.from = from; existing.to = to; }
+    else{ state.favorites.push({ id: uid(), from: from, to: to, distanceKm: distanceKm }); }
+    renderFavoriteSelect();
+    updateKnownRoutesCount();
+  }
+
+  function updateKnownRoutesCount(){
+    document.getElementById('knownRoutesCount').textContent = state.favorites.length;
+  }
+
+  function renderRoutesManageList(){
+    var list = document.getElementById('routesManageList');
+    if(state.favorites.length===0){
+      list.innerHTML = '<div class="empty"><h3>Aucun trajet enregistré</h3><p>Chaque trajet que vous créez est mémorisé automatiquement ici, avec sa distance.</p></div>';
+      return;
+    }
+    list.innerHTML = state.favorites.slice().sort(function(a,b){ return a.from.localeCompare(b.from); }).map(function(f){
+      return '<div class="route-row">'
+        + '<div class="route-text">'+escapeHtml(f.from)+' <span style="color:var(--gold)">→</span> '+escapeHtml(f.to)+'</div>'
+        + '<div class="route-controls">'
+        + '<input type="number" step="0.1" min="0" value="'+f.distanceKm+'" data-route-id="'+f.id+'" class="route-distance-input">'
+        + '<span>km</span>'
+        + '<button class="icon-btn danger" data-del-route="'+f.id+'">Supprimer</button>'
+        + '</div></div>';
+    }).join('');
+  }
+
+  document.getElementById('manageRoutesLink').addEventListener('click', function(){
+    renderRoutesManageList();
+    document.getElementById('routesModalBackdrop').hidden = false;
+  });
+  document.getElementById('closeRoutesModalBtn').addEventListener('click', function(){
+    document.getElementById('routesModalBackdrop').hidden = true;
+  });
+  document.getElementById('routesManageList').addEventListener('change', function(e){
+    var routeId = e.target.getAttribute('data-route-id');
+    if(!routeId) return;
+    var val = parseFloat(e.target.value);
+    if(!val || val<=0) return;
+    var f = state.favorites.find(function(x){ return x.id===routeId; });
+    if(f){ f.distanceKm = val; saveState(); renderFavoriteSelect(); toast('Distance mise à jour'); }
+  });
+  document.getElementById('routesManageList').addEventListener('click', function(e){
+    var routeId = e.target.getAttribute('data-del-route');
+    if(!routeId) return;
+    if(confirm('Supprimer ce trajet enregistré ?')){
+      state.favorites = state.favorites.filter(function(f){ return f.id!==routeId; });
+      saveState();
+      renderFavoriteSelect();
+      updateKnownRoutesCount();
+      renderRoutesManageList();
+    }
+  });
+
+  function resolveCity(address, coordKey){
+    if(selectedCoords[coordKey]) return selectedCoords[coordKey];
+    var m = fuzzyCityMatch(address);
+    return m ? { lat:m.lat, lon:m.lon } : null;
+  }
+
+  // ---------- REAL geocoding + routing (BAN + OSRM) ----------
+  // This was blocked when running inside the Claude artifact preview sandbox (confirmed
+  // with two independent providers). It is kept here because it should work normally once
+  // this page is hosted on its own domain (e.g. Vercel) and opened in a regular browser —
+  // that sandbox restriction does not apply to an independently hosted page. Fails fast and
+  // falls through cleanly if unavailable, so it's harmless to keep trying first.
+  async function fetchDistanceKmReal(from, to){
+    function withTimeout(url, opts){
+      var controller = new AbortController();
+      var t = setTimeout(function(){ controller.abort(); }, 6000);
+      opts = opts || {};
+      opts.signal = controller.signal;
+      return fetch(url, opts).finally(function(){ clearTimeout(t); });
+    }
+    async function geocode(address){
+      var url = "https://api-adresse.data.gouv.fr/search/?q=" + encodeURIComponent(address) + "&limit=1";
+      var response;
+      try{ response = await withTimeout(url); }
+      catch(e){ throw new Error("Service d'adresses indisponible"); }
+      if(!response.ok) throw new Error("Service d'adresses HTTP " + response.status);
+      var data = await response.json();
+      if(!data.features || data.features.length===0) throw new Error("Adresse introuvable : " + address);
+      var f = data.features[0];
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: f.properties.label };
+    }
+    var p1 = await geocode(from);
+    var p2 = await geocode(to);
+    var routeUrl = "https://router.project-osrm.org/route/v1/driving/" + p1.lon + "," + p1.lat + ";" + p2.lon + "," + p2.lat + "?overview=false";
+    var routeRes;
+    try{ routeRes = await withTimeout(routeUrl); }
+    catch(e){ throw new Error("Service d'itinéraire indisponible"); }
+    if(!routeRes.ok) throw new Error("Service d'itinéraire HTTP " + routeRes.status);
+    var routeData = await routeRes.json();
+    if(!routeData.routes || routeData.routes.length===0) throw new Error("Itinéraire introuvable");
+    return { km: routeData.routes[0].distance/1000, label1: p1.label, label2: p2.label };
+  }
+
+  // ---------- AI web-search estimate (works specifically inside the Claude artifact preview) ----------
+  async function fetchDistanceKmViaSearch(from, to){
+    var prompt = "Tu calcules une distance routière pour une note de frais professionnelle en France.\n"
+      + "Cherche sur le web (Mappy, ViaMichelin, Google Maps, ou tout résultat pertinent) la distance routière entre :\n"
+      + "Départ : \"" + from + "\"\n"
+      + "Arrivée : \"" + to + "\"\n\n"
+      + "Fais une recherche même si les adresses sont incomplètes ou approximatives. Donne ta MEILLEURE ESTIMATION dès que tu identifies les deux villes ou zones concernées : si tu ne trouves pas l'adresse exacte au numéro de rue près, utilise la distance entre les centres-villes ou codes postaux correspondants — c'est une approximation acceptable pour cet usage. Ne réponds \"trouve\": false QUE si un des deux lieux est manifestement introuvable, imaginaire, ou trop ambigu pour même identifier une ville.\n\n"
+      + "Termine ta réponse par une dernière ligne contenant UNIQUEMENT un objet JSON valide (rien d'autre sur cette ligne), au format exact :\n"
+      + "{\"trouve\": true, \"distance_km\": 123.4}\n"
+      + "ou, seulement en dernier recours :\n"
+      + "{\"trouve\": false}";
+
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function(){ controller.abort(); }, 9000);
+    var response;
+    try{
+      response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 4096,
+          messages: [{ role: "user", content: prompt }],
+          tools: [{ type: "web_search_20250305", name: "web_search" }]
+        }),
+        signal: controller.signal
+      });
+    }catch(networkErr){
+      if(networkErr.name === 'AbortError'){
+        throw new Error("Pas de réponse — cette fonction ne marche que dans une conversation Claude, pas une fois le fichier enregistré et ouvert seul");
+      }
+      throw new Error("Réseau indisponible (" + networkErr.message + ")");
+    }finally{
+      clearTimeout(timeoutId);
+    }
+
+    if(!response.ok){
+      var errBody = '';
+      try{ errBody = await response.text(); }catch(e){}
+      throw new Error('HTTP ' + response.status + (errBody ? ' — ' + errBody.slice(0,180) : ''));
+    }
+    var data = await response.json();
+    if(data.error){ throw new Error('API: ' + (data.error.message || JSON.stringify(data.error))); }
+
+    var textBlocks = (data.content||[]).filter(function(b){ return b.type==='text'; }).map(function(b){ return b.text; });
+    if(textBlocks.length===0){ throw new Error('Réponse sans texte (stop_reason: ' + data.stop_reason + ')'); }
+    var lastText = textBlocks[textBlocks.length-1];
+    var match = lastText.match(/\{\s*"trouve"[\s\S]*?\}/) || lastText.match(/\{[\s\S]*\}/);
+    if(!match){ throw new Error('JSON introuvable dans la réponse : « ' + lastText.slice(0,150) + ' »'); }
+    var parsed = JSON.parse(match[0]);
+    if(!parsed.trouve || typeof parsed.distance_km !== 'number' || !isFinite(parsed.distance_km)){
+      throw new Error('Distance non déterminée par la recherche');
+    }
+    return parsed.distance_km;
+  }
+
+  var runningStandalone = (window.location.protocol === 'file:');
+
+  document.getElementById('calcDistanceBtn').addEventListener('click', async function(){
+    var from = document.getElementById('mFrom').value.trim();
+    var to = document.getElementById('mTo').value.trim();
+    var status = document.getElementById('calcStatus');
+    var btn = document.getElementById('calcDistanceBtn');
+    document.getElementById('mFromSuggestions').hidden = true;
+    document.getElementById('mToSuggestions').hidden = true;
+    if(!from || !to){ status.style.color='var(--red)'; status.textContent = "Renseignez le départ et l'arrivée d'abord."; return; }
+
+    btn.disabled = true;
+    status.style.color = 'var(--ink-light)';
+    status.textContent = 'Recherche de la distance…';
+
+    // Tier 1: real geocoding + real road routing (works once hosted outside Claude's preview sandbox)
+    try{
+      var real = await fetchDistanceKmReal(from, to);
+      document.getElementById('mDistance').value = real.km.toFixed(1);
+      status.style.color = 'var(--green)';
+      status.textContent = 'Distance routière réelle : ' + real.km.toFixed(1) + ' km (aller simple).';
+      updateTotalPreview();
+      btn.disabled = false;
+      return;
+    }catch(realErr){ /* fall through */ }
+
+    // Tier 2: AI web-search estimate (works specifically inside the Claude artifact preview) — skip entirely when
+    // running as a standalone saved file, since that context never has access to it and would just wait pointlessly.
+    if(!runningStandalone){
+      status.textContent = 'Recherche en cours… (quelques secondes)';
+      try{
+        var km = await fetchDistanceKmViaSearch(from, to);
+        document.getElementById('mDistance').value = km.toFixed(1);
+        status.style.color = 'var(--red)';
+        status.textContent = '⚠ Estimation : ' + km.toFixed(1) + ' km. Marge d\u2019erreur possible de plusieurs km — vérifiez avant tout usage réel.';
+        updateTotalPreview();
+        btn.disabled = false;
+        return;
+      }catch(searchErr){
+        applyLocalEstimateOrFail(from, to, status, searchErr);
+        btn.disabled = false;
+        return;
+      }
+    }
+
+    applyLocalEstimateOrFail(from, to, status, null);
+    btn.disabled = false;
+  });
+
+  function applyLocalEstimateOrFail(from, to, status, searchErr){
+      var p1 = resolveCity(from, 'from');
+      var p2 = resolveCity(to, 'to');
+      var straight = (p1 && p2) ? haversineKm(p1.lat, p1.lon, p2.lat, p2.lon) : null;
+      if(straight !== null && straight >= 1){
+        var estKm = straight * 1.3;
+        document.getElementById('mDistance').value = estKm.toFixed(1);
+        status.style.color = 'var(--red)';
+        status.textContent = '⚠ Estimation très grossière (hors ligne) : ' + estKm.toFixed(1) + ' km. Marge d\u2019erreur importante, à vérifier avant tout usage réel.';
+        updateTotalPreview();
+      } else if(straight !== null){
+        status.style.color = 'var(--red)';
+        status.textContent = "Départ et arrivée semblent être dans la même ville d'après la base locale — saisissez la distance manuellement.";
+      } else {
+        status.style.color = 'var(--red)';
+        status.textContent = (searchErr ? 'Échec : ' + searchErr.message + ' — ' : '') + 'Ville(s) non reconnue(s) — saisissez la distance manuellement.';
+      }
+  }
+
+  // ---------- BILAN ----------
+  function renderOdometer(container, value){
+    var digits = Math.round(value).toString().padStart(5,'0').split('');
+    container.innerHTML = digits.map(function(d){ return '<div class="odo-digit">'+d+'</div>'; }).join('');
+  }
+
+  function renderBilan(){
+    var y = currentYear();
+    document.getElementById('bilanYearLabel').textContent = y;
+    var trips = state.trips.filter(function(t){ return new Date(t.date).getFullYear().toString()===y; });
+    var grandTotal = trips.reduce(function(s,t){ return s+t.totalKm; },0);
+    renderOdometer(document.getElementById('odometerTotal'), grandTotal);
+
+    var byAssociate = {};
+    state.associates.forEach(function(a){ byAssociate[a.id] = 0; });
+    trips.forEach(function(t){ byAssociate[t.associateId] = (byAssociate[t.associateId]||0) + t.totalKm; });
+
+    var byVehicle = {};
+    state.vehicles.forEach(function(v){ byVehicle[v.id] = 0; });
+    trips.forEach(function(t){ byVehicle[t.vehicleId] = (byVehicle[t.vehicleId]||0) + t.totalKm; });
+
+    var maxA = Math.max(1, Math.max.apply(null, Object.values(byAssociate).concat([0])));
+    var maxV = Math.max(1, Math.max.apply(null, Object.values(byVehicle).concat([0])));
+
+    var associateContainer = document.getElementById('bilanAssociates');
+    if(state.associates.length===0){
+      associateContainer.innerHTML = '<div class="empty"><h3>Aucun associé</h3><p>Ajoutez des associés pour voir leur total kilométrique ici.</p></div>';
+    } else {
+      associateContainer.innerHTML = state.associates.map(function(a){
+        var km = byAssociate[a.id]||0;
+        var pct = (km/maxA*100).toFixed(0);
+        return '<div class="bilan-row" style="flex-direction:column; align-items:stretch;">'
+          + '<div style="display:flex; justify-content:space-between;"><span class="name">'+escapeHtml(a.name)+'</span><span class="km mono">'+km.toFixed(1)+' km</span></div>'
+          + '<div class="bilan-bar-track"><div class="bilan-bar-fill" style="width:'+pct+'%"></div></div></div>';
+      }).join('');
+    }
+
+    var vehicleContainer = document.getElementById('bilanVehicles');
+    if(state.vehicles.length===0){
+      vehicleContainer.innerHTML = '<div class="empty"><h3>Aucun véhicule</h3><p>Ajoutez des véhicules pour voir leur total kilométrique ici.</p></div>';
+    } else {
+      vehicleContainer.innerHTML = state.vehicles.map(function(v){
+        var km = byVehicle[v.id]||0;
+        var pct = (km/maxV*100).toFixed(0);
+        return '<div class="bilan-row" style="flex-direction:column; align-items:stretch;">'
+          + '<div style="display:flex; justify-content:space-between;"><span class="name">'+escapeHtml(v.name)+'</span><span class="km mono">'+km.toFixed(1)+' km</span></div>'
+          + '<div class="bilan-bar-track"><div class="bilan-bar-fill" style="width:'+pct+'%"></div></div></div>';
+      }).join('');
+    }
+  }
+
+  // ---------- PDF EXPORT (via native browser/phone print — no external library needed) ----------
+  document.getElementById('exportPdfBtn').addEventListener('click', function(){
+    var y = currentYear();
+    var trips = state.trips.filter(function(t){ return new Date(t.date).getFullYear().toString()===y; })
+                            .sort(function(a,b){ return a.date.localeCompare(b.date); });
+
+    var rows = trips.map(function(t){
+      var dateFmt = new Date(t.date).toLocaleDateString('fr-FR');
+      return '<tr>'
+        + '<td>'+dateFmt+'</td>'
+        + '<td>'+escapeHtml(associateName(t.associateId))+'</td>'
+        + '<td>'+escapeHtml(vehicleName(t.vehicleId))+'</td>'
+        + '<td>'+escapeHtml(t.comment||'')+'</td>'
+        + '<td>'+escapeHtml(t.from)+'</td>'
+        + '<td>'+escapeHtml(t.to)+'</td>'
+        + '<td class="num">'+t.distanceKm.toFixed(1)+'</td>'
+        + '<td class="num">'+(t.roundTrip?'Oui':'Non')+'</td>'
+        + '<td class="num">'+t.count+'</td>'
+        + '<td class="num">'+t.totalKm.toFixed(1)+'</td>'
+        + '</tr>';
+    }).join('');
+
+    var byA = {};
+    state.associates.forEach(function(a){ byA[a.name] = 0; });
+    trips.forEach(function(t){ byA[associateName(t.associateId)] = (byA[associateName(t.associateId)]||0) + t.totalKm; });
+    var rowsA = Object.entries(byA).map(function(e){ return '<tr><td>'+escapeHtml(e[0])+'</td><td class="num">'+e[1].toFixed(1)+'</td></tr>'; }).join('');
+
+    var byV = {};
+    state.vehicles.forEach(function(v){ byV[v.name] = 0; });
+    trips.forEach(function(t){ byV[vehicleName(t.vehicleId)] = (byV[vehicleName(t.vehicleId)]||0) + t.totalKm; });
+    var rowsV = Object.entries(byV).map(function(e){ return '<tr><td>'+escapeHtml(e[0])+'</td><td class="num">'+e[1].toFixed(1)+'</td></tr>'; }).join('');
+
+    var grandTotal = trips.reduce(function(s,t){ return s+t.totalKm; },0);
+
+    document.getElementById('printReport').innerHTML =
+      '<h1>Déclaration d\u2019indemnités kilométriques</h1>'
+      + '<div class="print-sub">Année ' + y + ' — généré le ' + new Date().toLocaleDateString('fr-FR') + '</div>'
+      + (trips.length===0
+          ? '<p>Aucun trajet enregistré pour ' + y + '.</p>'
+          : '<table><thead><tr><th>Date</th><th>Associé</th><th>Véhicule</th><th>Motif</th><th>Départ</th><th>Arrivée</th><th class="num">Km (aller)</th><th class="num">A/R</th><th class="num">Trajets</th><th class="num">Total km</th></tr></thead><tbody>' + rows + '</tbody></table>')
+      + '<h2>Total par associé</h2><table><thead><tr><th>Associé</th><th class="num">Total km</th></tr></thead><tbody>' + rowsA + '</tbody></table>'
+      + '<h2>Total par véhicule</h2><table><thead><tr><th>Véhicule</th><th class="num">Total km</th></tr></thead><tbody>' + rowsV + '</tbody></table>'
+      + '<div class="grand-total">Total général ' + y + ' : ' + grandTotal.toFixed(1) + ' km</div>';
+
+    window.print();
+  });
+
+  // ---------- INIT ----------
+  (async function init(){
+    await detectStorageBackend();
+    state = await loadState();
+    if(storageBackend==='none'){
+      toast("Sauvegarde locale indisponible sur cet appareil — vos données ne seront pas conservées après fermeture.");
+    }
+    populateYearSelect();
+    refreshSelects();
+    renderVehicles();
+    renderAssociates();
+    renderTrips();
+    updateKnownRoutesCount();
+    showView('trajets');
+  })();
+
+})();
+</script>
+</body>
+</html>
