@@ -103,6 +103,16 @@
   .suggestion-empty{padding:10px 12px; font-size:12px; color:var(--ink-light);}
   .distance-box{display:flex; align-items:center; gap:10px; margin-top:8px;}
   .distance-box input{flex:1; min-width:0;}
+  .leg-row{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px;}
+  .leg-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .leg-num{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); font-weight:700;}
+  .leg-row input{margin-bottom:8px;}
+  .leg-row input:last-of-type{margin-bottom:0;}
+  .leg-distance-row{display:flex; gap:8px; align-items:center;}
+  .leg-distance-row input{flex:1; min-width:0; margin-bottom:0;}
+  .btn-calc-sm{background:var(--gold); color:#fff; border:none; border-radius:8px; padding:9px 12px; font-size:11px; font-weight:700; white-space:nowrap; cursor:pointer;}
+  .leg-status{font-size:11px; color:var(--ink-light); margin-top:6px; line-height:1.4;}
+  .btn-add-leg{width:100%; background:none; border:1.5px dashed var(--border); color:var(--ink-light); border-radius:10px; padding:11px; font-weight:600; font-size:13px; cursor:pointer;}
   .btn-calc{background:var(--gold); color:#fff; border:none; border-radius:10px; padding:10px 14px; font-size:12px; font-weight:700; white-space:nowrap; cursor:pointer;}
   .btn-calc:disabled{opacity:.5;}
   .btn-maps{display:flex; align-items:center; justify-content:center; gap:8px; background:var(--ink); color:var(--paper); text-decoration:none; border-radius:10px; padding:12px; font-size:13px; font-weight:600; margin-top:14px;}
@@ -276,25 +286,43 @@
       <option value="">— Choisir un trajet enregistré —</option>
     </select>
 
-    <label for="mFrom">Point de départ <span style="font-weight:400; text-transform:none; letter-spacing:0;">(adresse ou coordonnées GPS)</span></label>
-    <div class="autocomplete-wrap">
-      <input type="text" id="mFrom" placeholder="Adresse, ou 48.00891, 0.18756" autocomplete="off">
-      <div class="suggestions" id="mFromSuggestions" hidden></div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="mIsMultiStop">
+      <label for="mIsMultiStop">Trajet à plusieurs étapes (plusieurs arrêts dans la journée)</label>
     </div>
 
-    <label for="mTo">Point d'arrivée <span style="font-weight:400; text-transform:none; letter-spacing:0;">(adresse ou coordonnées GPS)</span></label>
-    <div class="autocomplete-wrap">
-      <input type="text" id="mTo" placeholder="Adresse, ou 47.46370, -0.55290" autocomplete="off">
-      <div class="suggestions" id="mToSuggestions" hidden></div>
+    <div id="singleLegWrap">
+      <label for="mFrom">Point de départ <span style="font-weight:400; text-transform:none; letter-spacing:0;">(adresse ou coordonnées GPS)</span></label>
+      <div class="autocomplete-wrap">
+        <input type="text" id="mFrom" placeholder="Adresse, ou 48.00891, 0.18756" autocomplete="off">
+        <div class="suggestions" id="mFromSuggestions" hidden></div>
+      </div>
+
+      <label for="mTo">Point d'arrivée <span style="font-weight:400; text-transform:none; letter-spacing:0;">(adresse ou coordonnées GPS)</span></label>
+      <div class="autocomplete-wrap">
+        <input type="text" id="mTo" placeholder="Adresse, ou 47.46370, -0.55290" autocomplete="off">
+        <div class="suggestions" id="mToSuggestions" hidden></div>
+      </div>
+
+      <div class="distance-box">
+        <input type="number" id="mDistance" step="0.1" min="0" placeholder="Distance (km)">
+        <button class="btn-calc" id="calcDistanceBtn">Calculer</button>
+      </div>
     </div>
 
-    <div class="distance-box">
-      <input type="number" id="mDistance" step="0.1" min="0" placeholder="Distance (km)">
-      <button class="btn-calc" id="calcDistanceBtn">Calculer</button>
+    <div id="multiLegWrap" hidden>
+      <label>Étapes du trajet</label>
+      <div id="legsList"></div>
+      <button type="button" class="btn-add-leg" id="addLegBtn">+ Ajouter une étape</button>
+      <div class="total-preview" style="margin-top:12px;">
+        <span>Total des étapes</span>
+        <span class="val" id="legsTotalPreview">0 km</span>
+      </div>
     </div>
+
     <div class="calc-status" id="calcStatus">Adresse introuvable ? Dans Google Maps, appuyez longuement sur le point exact → les coordonnées GPS s'affichent en bas → collez-les ici (format 48.00891, 0.18756) à la place de l'adresse. Chaque trajet saisi est mémorisé automatiquement pour la prochaine fois.</div>
 
-    <div class="checkbox-row">
+    <div class="checkbox-row" id="roundTripRow">
       <input type="checkbox" id="mRoundTrip">
       <label for="mRoundTrip">Aller-retour (double la distance)</label>
     </div>
@@ -580,10 +608,17 @@
       var dateFmt = t.dateEnd
         ? new Date(t.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'}) + ' → ' + new Date(t.dateEnd).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'})
         : new Date(t.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'});
+      var routeHtml;
+      if(t.legs && t.legs.length){
+        var stops = [t.legs[0].from].concat(t.legs.map(function(l){ return l.to; }));
+        routeHtml = escapeHtml(stops.join(' → '));
+      } else {
+        routeHtml = escapeHtml(t.from) + ' <span class="arrow">→</span> ' + escapeHtml(t.to);
+      }
       return '<div class="card trip-card">'
         + '<div class="trip-top"><div class="trip-date">'+dateFmt+'</div><div class="trip-total mono">'+t.totalKm.toFixed(1)+' km</div></div>'
-        + '<div class="trip-tags"><span class="tag tag-vehicle">'+escapeHtml(vehicleName(t.vehicleId))+'</span><span class="tag tag-associate">'+escapeHtml(associateName(t.associateId))+'</span></div>'
-        + '<div class="trip-route">'+escapeHtml(t.from)+' <span class="arrow">→</span> '+escapeHtml(t.to)+'</div>'
+        + '<div class="trip-tags"><span class="tag tag-vehicle">'+escapeHtml(vehicleName(t.vehicleId))+'</span><span class="tag tag-associate">'+escapeHtml(associateName(t.associateId))+'</span>'+(t.legs&&t.legs.length?'<span class="tag" style="background:var(--paper-dim); color:var(--ink-light);">'+t.legs.length+' étapes</span>':'')+'</div>'
+        + '<div class="trip-route">'+routeHtml+'</div>'
         + (t.comment ? '<div class="trip-comment">'+escapeHtml(t.comment)+'</div>' : '')
         + '<div class="trip-meta">'+t.distanceKm.toFixed(1)+' km '+(t.roundTrip? '× 2 (A/R)':'')+' × '+t.count+' trajet'+(t.count>1?'s':'')+'</div>'
         + '<div class="trip-actions"><button class="icon-btn" data-edit="'+t.id+'">Modifier</button><button class="icon-btn danger" data-del="'+t.id+'">Supprimer</button></div>'
@@ -617,6 +652,109 @@
   }
   document.getElementById('mIsRecurring').addEventListener('change', applyRecurringToggle);
 
+  // ---------- MULTI-STOP LEGS ----------
+  var currentLegs = [];
+
+  function newLeg(from, to, distanceKm){
+    return { id: uid(), from: from||'', to: to||'', distanceKm: (distanceKm!==undefined && distanceKm!==null) ? distanceKm : null };
+  }
+
+  function legsTotalKm(){
+    return currentLegs.reduce(function(s,l){ return s + (parseFloat(l.distanceKm)||0); }, 0);
+  }
+
+  function updateLegsTotalPreview(){
+    document.getElementById('legsTotalPreview').textContent = legsTotalKm().toFixed(1) + ' km';
+    updateTotalPreview();
+  }
+
+  function renderLegs(){
+    var list = document.getElementById('legsList');
+    list.innerHTML = currentLegs.map(function(leg, i){
+      return '<div class="leg-row" data-leg-row="'+leg.id+'">'
+        + '<div class="leg-header"><span class="leg-num">Étape '+(i+1)+(i===0?' (départ)':(i===currentLegs.length-1?' (arrivée)':''))+'</span>'
+        + (currentLegs.length>2 ? '<button type="button" class="icon-btn danger" data-remove-leg="'+leg.id+'">Retirer</button>' : '')
+        + '</div>'
+        + '<input type="text" data-leg-field="from" data-leg-id="'+leg.id+'" placeholder="Départ" value="'+escapeHtml(leg.from)+'">'
+        + '<input type="text" data-leg-field="to" data-leg-id="'+leg.id+'" placeholder="Arrivée" value="'+escapeHtml(leg.to)+'">'
+        + '<div class="leg-distance-row">'
+        + '<input type="number" step="0.1" min="0" data-leg-field="distanceKm" data-leg-id="'+leg.id+'" placeholder="Distance (km)" value="'+(leg.distanceKm!==null?leg.distanceKm:'')+'">'
+        + '<button type="button" class="btn-calc-sm" data-calc-leg="'+leg.id+'">Calculer</button>'
+        + '</div>'
+        + '<div class="leg-status" data-leg-status="'+leg.id+'"></div>'
+        + '</div>';
+    }).join('');
+    updateLegsTotalPreview();
+  }
+
+  document.getElementById('addLegBtn').addEventListener('click', function(){
+    var prevTo = currentLegs.length ? currentLegs[currentLegs.length-1].to : '';
+    currentLegs.push(newLeg(prevTo, '', null)); // chain: new leg starts where the previous one ended
+    renderLegs();
+  });
+
+  document.getElementById('legsList').addEventListener('input', function(e){
+    var id = e.target.getAttribute('data-leg-id');
+    var field = e.target.getAttribute('data-leg-field');
+    if(!id || !field) return;
+    var leg = currentLegs.find(function(l){ return l.id===id; });
+    if(!leg) return;
+    leg[field] = (field==='distanceKm') ? (parseFloat(e.target.value)||null) : e.target.value;
+    if(field==='distanceKm') updateLegsTotalPreview();
+  });
+
+  document.getElementById('legsList').addEventListener('blur', function(e){
+    var field = e.target.getAttribute('data-leg-field');
+    if(field !== 'to' && field !== 'from') return;
+    var id = e.target.getAttribute('data-leg-id');
+    var leg = currentLegs.find(function(l){ return l.id===id; });
+    if(!leg || !leg.from || !leg.to) return;
+    var known = findKnownDistance(leg.from, leg.to);
+    if(known !== null){
+      leg.distanceKm = known;
+      renderLegs();
+    }
+  }, true);
+
+  document.getElementById('legsList').addEventListener('click', async function(e){
+    var removeId = e.target.getAttribute('data-remove-leg');
+    if(removeId){
+      currentLegs = currentLegs.filter(function(l){ return l.id!==removeId; });
+      renderLegs();
+      return;
+    }
+    var calcId = e.target.getAttribute('data-calc-leg');
+    if(calcId){
+      var leg = currentLegs.find(function(l){ return l.id===calcId; });
+      var statusEl = document.querySelector('[data-leg-status="'+calcId+'"]');
+      if(!leg || !leg.from || !leg.to){ statusEl.textContent = "Renseignez départ et arrivée de cette étape d'abord."; statusEl.style.color='var(--red)'; return; }
+      e.target.disabled = true;
+      statusEl.style.color = 'var(--ink-light)';
+      statusEl.textContent = 'Recherche…';
+      var result = await resolveDistance(leg.from, leg.to);
+      if(result.km !== null) leg.distanceKm = result.km;
+      statusEl.style.color = result.color;
+      statusEl.textContent = result.message;
+      e.target.disabled = false;
+      var input = document.querySelector('[data-leg-field="distanceKm"][data-leg-id="'+calcId+'"]');
+      if(input && result.km !== null) input.value = result.km.toFixed(1);
+      updateLegsTotalPreview();
+    }
+  });
+
+  function applyMultiStopToggle(){
+    var multi = document.getElementById('mIsMultiStop').checked;
+    document.getElementById('singleLegWrap').hidden = multi;
+    document.getElementById('multiLegWrap').hidden = !multi;
+    document.getElementById('roundTripRow').hidden = multi;
+    document.getElementById('calcStatus').hidden = multi;
+    if(multi && currentLegs.length===0){
+      currentLegs = [newLeg('','',null), newLeg('','',null)];
+      renderLegs();
+    }
+  }
+  document.getElementById('mIsMultiStop').addEventListener('change', applyMultiStopToggle);
+
   function openTripModal(tripId){
     if(state.vehicles.length===0){ toast("Ajoutez d'abord un véhicule"); showView('vehicules'); return; }
     if(state.associates.length===0){ toast("Ajoutez d'abord un associé"); showView('associes'); return; }
@@ -630,6 +768,7 @@
     document.getElementById('mToSuggestions').hidden = true;
     renderFavoriteSelect();
     document.getElementById('mFavorite').value = '';
+    currentLegs = [];
 
     if(tripId){
       var t = state.trips.find(function(x){ return x.id===tripId; });
@@ -640,6 +779,10 @@
       document.getElementById('mDateStart').value = t.date;
       document.getElementById('mDateEnd').value = t.dateEnd || '';
       document.getElementById('mComment').value = t.comment || '';
+      document.getElementById('mIsMultiStop').checked = !!(t.legs && t.legs.length);
+      if(t.legs && t.legs.length){
+        currentLegs = t.legs.map(function(l){ return newLeg(l.from, l.to, l.distanceKm); });
+      }
       document.getElementById('mFrom').value = t.from;
       document.getElementById('mTo').value = t.to;
       document.getElementById('mDistance').value = t.distanceKm;
@@ -648,6 +791,7 @@
     } else {
       var today = new Date().toISOString().slice(0,10);
       document.getElementById('mIsRecurring').checked = false;
+      document.getElementById('mIsMultiStop').checked = false;
       document.getElementById('mDate').value = today;
       document.getElementById('mDateStart').value = today;
       document.getElementById('mDateEnd').value = '';
@@ -659,6 +803,8 @@
       document.getElementById('mCount').value = 1;
     }
     applyRecurringToggle();
+    applyMultiStopToggle();
+    if(currentLegs.length) renderLegs();
     updateTotalPreview();
     backdrop.hidden = false;
   }
@@ -670,9 +816,12 @@
     document.getElementById(id).addEventListener('change', updateTotalPreview);
   });
   function computeTotal(){
+    var c = parseInt(document.getElementById('mCount').value) || 1;
+    if(document.getElementById('mIsMultiStop').checked){
+      return legsTotalKm() * c;
+    }
     var d = parseFloat(document.getElementById('mDistance').value) || 0;
     var rt = document.getElementById('mRoundTrip').checked ? 2 : 1;
-    var c = parseInt(document.getElementById('mCount').value) || 1;
     return d * rt * c;
   }
   function updateTotalPreview(){
@@ -683,6 +832,7 @@
     var vehicleId = document.getElementById('mVehicle').value;
     var associateId = document.getElementById('mAssociate').value;
     var isRecurring = document.getElementById('mIsRecurring').checked;
+    var isMultiStop = document.getElementById('mIsMultiStop').checked;
     var date, dateEnd = null;
     if(isRecurring){
       date = document.getElementById('mDateStart').value;
@@ -691,10 +841,6 @@
       date = document.getElementById('mDate').value;
     }
     var comment = document.getElementById('mComment').value.trim();
-    var from = document.getElementById('mFrom').value.trim();
-    var to = document.getElementById('mTo').value.trim();
-    var distanceKm = parseFloat(document.getElementById('mDistance').value);
-    var roundTrip = document.getElementById('mRoundTrip').checked;
     var count = parseInt(document.getElementById('mCount').value) || 1;
 
     if(!vehicleId || !associateId){ toast('Choisissez un véhicule et un associé'); return; }
@@ -703,13 +849,35 @@
       if(!dateEnd){ toast('Indiquez la date de fin'); return; }
       if(dateEnd < date){ toast('La date de fin doit être après la date de début'); return; }
     }
-    if(!from || !to){ toast("Indiquez le départ et l'arrivée"); return; }
-    if(!distanceKm || distanceKm<=0){ toast('Indiquez une distance valide'); return; }
 
-    var totalKm = distanceKm * (roundTrip?2:1) * count;
-    var trip = { id: editingTripId || uid(), vehicleId:vehicleId, associateId:associateId, date:date, dateEnd: isRecurring ? dateEnd : null, comment:comment, from:from, to:to, distanceKm:distanceKm, roundTrip:roundTrip, count:count, totalKm:totalKm };
+    var from, to, distanceKm, roundTrip, legs, totalKm;
 
-    rememberRoute(from, to, distanceKm);
+    if(isMultiStop){
+      for(var i=0;i<currentLegs.length;i++){
+        var l = currentLegs[i];
+        if(!l.from || !l.to){ toast('Complétez le départ et l\u2019arrivée de chaque étape'); return; }
+        if(!l.distanceKm || l.distanceKm<=0){ toast('Indiquez la distance de l\u2019étape '+(i+1)); return; }
+      }
+      legs = currentLegs.map(function(l){ return { from:l.from, to:l.to, distanceKm:l.distanceKm }; });
+      from = legs[0].from;
+      to = legs[legs.length-1].to;
+      distanceKm = legsTotalKm();
+      roundTrip = false;
+      totalKm = distanceKm * count;
+      legs.forEach(function(l){ rememberRoute(l.from, l.to, l.distanceKm); });
+    } else {
+      from = document.getElementById('mFrom').value.trim();
+      to = document.getElementById('mTo').value.trim();
+      distanceKm = parseFloat(document.getElementById('mDistance').value);
+      roundTrip = document.getElementById('mRoundTrip').checked;
+      legs = null;
+      if(!from || !to){ toast("Indiquez le départ et l'arrivée"); return; }
+      if(!distanceKm || distanceKm<=0){ toast('Indiquez une distance valide'); return; }
+      totalKm = distanceKm * (roundTrip?2:1) * count;
+      rememberRoute(from, to, distanceKm);
+    }
+
+    var trip = { id: editingTripId || uid(), vehicleId:vehicleId, associateId:associateId, date:date, dateEnd: isRecurring ? dateEnd : null, comment:comment, from:from, to:to, legs:legs, distanceKm:distanceKm, roundTrip:roundTrip, count:count, totalKm:totalKm };
 
     if(editingTripId){
       var idx = state.trips.findIndex(function(t){ return t.id===editingTripId; });
@@ -1100,6 +1268,49 @@
 
   var runningStandalone = (window.location.protocol === 'file:');
 
+  // Reusable distance resolver: tries real geocoding, then AI search, then local estimate.
+  // Returns { km, message, color } and never throws — a definitive failure is represented in the message.
+  async function resolveDistance(from, to){
+    // Tier 1: real geocoding + real road routing
+    try{
+      var real = await fetchDistanceKmReal(from, to);
+      var approxNote = (real.approx1 || real.approx2) ? ' (niveau rue, numéro exact non trouvé)' : '';
+      return {
+        km: real.km,
+        color: (real.approx1 || real.approx2) ? 'var(--gold)' : 'var(--green)',
+        message: real.km.toFixed(1) + ' km' + approxNote + ' — ' + real.label1 + ' → ' + real.label2 + '. Vérifiez que ce sont bien les bonnes adresses.'
+      };
+    }catch(realErr){ /* fall through */ }
+
+    // Tier 2: AI web-search estimate (works specifically inside the Claude artifact preview)
+    if(!runningStandalone){
+      try{
+        var km = await fetchDistanceKmViaSearch(from, to);
+        return {
+          km: km,
+          color: 'var(--red)',
+          message: '⚠ Estimation : ' + km.toFixed(1) + ' km. Marge d\u2019erreur possible de plusieurs km — vérifiez avant tout usage réel.'
+        };
+      }catch(searchErr){
+        return localEstimateOrFail(from, to, searchErr);
+      }
+    }
+    return localEstimateOrFail(from, to, null);
+  }
+
+  function localEstimateOrFail(from, to, searchErr){
+      var p1 = resolveCity(from, 'from');
+      var p2 = resolveCity(to, 'to');
+      var straight = (p1 && p2) ? haversineKm(p1.lat, p1.lon, p2.lat, p2.lon) : null;
+      if(straight !== null && straight >= 1){
+        var estKm = straight * 1.3;
+        return { km: estKm, color: 'var(--red)', message: '⚠ Estimation très grossière (hors ligne) : ' + estKm.toFixed(1) + ' km. Marge d\u2019erreur importante, à vérifier avant tout usage réel.' };
+      } else if(straight !== null){
+        return { km: null, color: 'var(--red)', message: "Départ et arrivée semblent être dans la même ville d'après la base locale — saisissez la distance manuellement." };
+      }
+      return { km: null, color: 'var(--red)', message: (searchErr ? 'Échec : ' + searchErr.message + ' — ' : '') + 'Ville(s) non reconnue(s) — saisissez la distance manuellement.' };
+  }
+
   document.getElementById('calcDistanceBtn').addEventListener('click', async function(){
     var from = document.getElementById('mFrom').value.trim();
     var to = document.getElementById('mTo').value.trim();
@@ -1113,59 +1324,13 @@
     status.style.color = 'var(--ink-light)';
     status.textContent = 'Recherche de la distance…';
 
-    // Tier 1: real geocoding + real road routing (works once hosted outside Claude's preview sandbox)
-    try{
-      var real = await fetchDistanceKmReal(from, to);
-      document.getElementById('mDistance').value = real.km.toFixed(1);
-      var approxNote = (real.approx1 || real.approx2) ? ' (niveau rue, numéro exact non trouvé — vérifiez la précision)' : '';
-      status.style.color = (real.approx1 || real.approx2) ? 'var(--gold)' : 'var(--green)';
-      status.textContent = real.km.toFixed(1) + ' km' + approxNote + ' — ' + real.label1 + ' → ' + real.label2 + '. Vérifiez que ce sont bien les bonnes adresses ci-dessus.';
-      updateTotalPreview();
-      btn.disabled = false;
-      return;
-    }catch(realErr){ /* fall through */ }
-
-    // Tier 2: AI web-search estimate (works specifically inside the Claude artifact preview) — skip entirely when
-    // running as a standalone saved file, since that context never has access to it and would just wait pointlessly.
-    if(!runningStandalone){
-      status.textContent = 'Recherche en cours… (quelques secondes)';
-      try{
-        var km = await fetchDistanceKmViaSearch(from, to);
-        document.getElementById('mDistance').value = km.toFixed(1);
-        status.style.color = 'var(--red)';
-        status.textContent = '⚠ Estimation : ' + km.toFixed(1) + ' km. Marge d\u2019erreur possible de plusieurs km — vérifiez avant tout usage réel.';
-        updateTotalPreview();
-        btn.disabled = false;
-        return;
-      }catch(searchErr){
-        applyLocalEstimateOrFail(from, to, status, searchErr);
-        btn.disabled = false;
-        return;
-      }
-    }
-
-    applyLocalEstimateOrFail(from, to, status, null);
+    var result = await resolveDistance(from, to);
+    if(result.km !== null) document.getElementById('mDistance').value = result.km.toFixed(1);
+    status.style.color = result.color;
+    status.textContent = result.message;
+    updateTotalPreview();
     btn.disabled = false;
   });
-
-  function applyLocalEstimateOrFail(from, to, status, searchErr){
-      var p1 = resolveCity(from, 'from');
-      var p2 = resolveCity(to, 'to');
-      var straight = (p1 && p2) ? haversineKm(p1.lat, p1.lon, p2.lat, p2.lon) : null;
-      if(straight !== null && straight >= 1){
-        var estKm = straight * 1.3;
-        document.getElementById('mDistance').value = estKm.toFixed(1);
-        status.style.color = 'var(--red)';
-        status.textContent = '⚠ Estimation très grossière (hors ligne) : ' + estKm.toFixed(1) + ' km. Marge d\u2019erreur importante, à vérifier avant tout usage réel.';
-        updateTotalPreview();
-      } else if(straight !== null){
-        status.style.color = 'var(--red)';
-        status.textContent = "Départ et arrivée semblent être dans la même ville d'après la base locale — saisissez la distance manuellement.";
-      } else {
-        status.style.color = 'var(--red)';
-        status.textContent = (searchErr ? 'Échec : ' + searchErr.message + ' — ' : '') + 'Ville(s) non reconnue(s) — saisissez la distance manuellement.';
-      }
-  }
 
   // ---------- BILAN ----------
   function renderOdometer(container, value){
@@ -1228,13 +1393,21 @@
       var dateFmt = t.dateEnd
         ? new Date(t.date).toLocaleDateString('fr-FR') + ' au ' + new Date(t.dateEnd).toLocaleDateString('fr-FR')
         : new Date(t.date).toLocaleDateString('fr-FR');
+      var fromCell, toCell;
+      if(t.legs && t.legs.length){
+        fromCell = escapeHtml(t.legs[0].from);
+        toCell = escapeHtml(t.legs.map(function(l){ return l.to; }).join(' → ')) + ' (' + t.legs.length + ' étapes)';
+      } else {
+        fromCell = escapeHtml(t.from);
+        toCell = escapeHtml(t.to);
+      }
       return '<tr>'
         + '<td>'+dateFmt+'</td>'
         + '<td>'+escapeHtml(associateName(t.associateId))+'</td>'
         + '<td>'+escapeHtml(vehicleName(t.vehicleId))+'</td>'
         + '<td>'+escapeHtml(t.comment||'')+'</td>'
-        + '<td>'+escapeHtml(t.from)+'</td>'
-        + '<td>'+escapeHtml(t.to)+'</td>'
+        + '<td>'+fromCell+'</td>'
+        + '<td>'+toCell+'</td>'
         + '<td class="num">'+t.distanceKm.toFixed(1)+'</td>'
         + '<td class="num">'+(t.roundTrip?'Oui':'Non')+'</td>'
         + '<td class="num">'+t.count+'</td>'
