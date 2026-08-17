@@ -51,6 +51,12 @@
   .trip-route .arrow{color:var(--gold); font-weight:700;}
   .trip-comment{font-size:12px; color:var(--ink); font-style:italic; margin:2px 0;}
   .trip-meta{font-size:12px; color:var(--ink-light);}
+  .reimburse-badge{margin-top:8px; width:100%; text-align:left; background:var(--red-soft); color:var(--red); border:none; border-radius:8px; padding:7px 10px; font-size:11px; font-weight:700; cursor:pointer;}
+  .reimburse-badge.is-reimbursed{background:var(--green-soft); color:var(--green);}
+  .reimburse-summary{display:flex; gap:8px; margin-bottom:16px;}
+  .reimburse-summary .rs-box{flex:1; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center;}
+  .reimburse-summary .rs-val{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:16px;}
+  .reimburse-summary .rs-label{font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-light); margin-top:2px;}
   .trip-total{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:15px; color:var(--ink);}
   .trip-actions{display:flex; gap:8px; margin-top:4px;}
   .icon-btn{border:none; background:none; color:var(--ink-light); font-size:12px; font-family:'Inter',sans-serif; padding:2px 6px; cursor:pointer; text-decoration:underline;}
@@ -80,8 +86,8 @@
 
   .fab{position:fixed; bottom:78px; right:16px; width:52px; height:52px; border-radius:50%; background:var(--ink); color:var(--paper); font-size:26px; line-height:1; border:none; box-shadow:0 6px 16px rgba(28,43,69,0.35); cursor:pointer; z-index:25; display:flex; align-items:center; justify-content:center;}
 
-  .filter-bar{display:flex; gap:8px; margin-bottom:14px;}
-  .filter-bar select{flex:1; min-width:0; font-size:12px; padding:8px 10px;}
+  .filter-bar{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
+  .filter-bar select{flex:1; min-width:96px; font-size:12px; padding:8px 10px;}
   .manage-routes-link{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; font-size:12px; color:var(--ink-light); margin-bottom:12px; cursor:pointer; font-weight:600;}
   .manage-routes-link span{color:var(--gold); font-family:'IBM Plex Mono',monospace;}
   .route-row{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px;}
@@ -183,6 +189,11 @@
       <div class="filter-bar">
         <select id="filterVehicle"><option value="">Tous véhicules</option></select>
         <select id="filterAssociate"><option value="">Tous associés</option></select>
+        <select id="filterReimbursed">
+          <option value="">Tous statuts</option>
+          <option value="yes">Remboursés</option>
+          <option value="no">Non remboursés</option>
+        </select>
       </div>
       <div id="tripsList"></div>
     </section>
@@ -211,6 +222,8 @@
           <div class="odo-unit">km</div>
         </div>
       </div>
+
+      <div class="reimburse-summary" id="reimburseSummary"></div>
 
       <div class="bilan-section-title">Par associé</div>
       <div id="bilanAssociates"></div>
@@ -329,6 +342,11 @@
 
     <label for="mCount" id="mCountLabel">Nombre de trajets effectués</label>
     <input type="number" id="mCount" min="1" step="1" value="1">
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="mReimbursed">
+      <label for="mReimbursed">Remboursement effectué</label>
+    </div>
 
     <div class="total-preview">
       <span>Total pour cette entrée</span>
@@ -574,6 +592,7 @@
   }
   document.getElementById('filterVehicle').addEventListener('change', renderTrips);
   document.getElementById('filterAssociate').addEventListener('change', renderTrips);
+  document.getElementById('filterReimbursed').addEventListener('change', renderTrips);
 
   // ---------- TRIPS LIST ----------
   function escapeHtml(s){
@@ -589,10 +608,13 @@
     var y = currentYear();
     var fv = document.getElementById('filterVehicle').value;
     var fa = document.getElementById('filterAssociate').value;
+    var fr = document.getElementById('filterReimbursed').value;
     return state.trips.filter(function(t){
       if(new Date(t.date).getFullYear().toString()!==y) return false;
       if(fv && t.vehicleId!==fv) return false;
       if(fa && t.associateId!==fa) return false;
+      if(fr==='yes' && !t.reimbursed) return false;
+      if(fr==='no' && t.reimbursed) return false;
       return true;
     }).sort(function(a,b){ return b.date.localeCompare(a.date); });
   }
@@ -621,6 +643,7 @@
         + '<div class="trip-route">'+routeHtml+'</div>'
         + (t.comment ? '<div class="trip-comment">'+escapeHtml(t.comment)+'</div>' : '')
         + '<div class="trip-meta">'+t.distanceKm.toFixed(1)+' km '+(t.roundTrip? '× 2 (A/R)':'')+' × '+t.count+' trajet'+(t.count>1?'s':'')+'</div>'
+        + '<button class="reimburse-badge '+(t.reimbursed?'is-reimbursed':'')+'" data-toggle-reimbursed="'+t.id+'">'+(t.reimbursed?'✓ Remboursé':'En attente de remboursement')+'</button>'
         + '<div class="trip-actions"><button class="icon-btn" data-edit="'+t.id+'">Modifier</button><button class="icon-btn danger" data-del="'+t.id+'">Supprimer</button></div>'
         + '</div>';
     }).join('');
@@ -628,11 +651,21 @@
   document.getElementById('tripsList').addEventListener('click', function(e){
     var editId = e.target.getAttribute('data-edit');
     var delId = e.target.getAttribute('data-del');
+    var reimburseId = e.target.getAttribute('data-toggle-reimbursed');
     if(editId) openTripModal(editId);
     if(delId){
       if(confirm('Supprimer ce trajet ?')){
         state.trips = state.trips.filter(function(t){ return t.id!==delId; });
         saveState(); renderTrips();
+      }
+    }
+    if(reimburseId){
+      var t = state.trips.find(function(x){ return x.id===reimburseId; });
+      if(t){
+        t.reimbursed = !t.reimbursed;
+        saveState();
+        renderTrips();
+        toast(t.reimbursed ? 'Marqué comme remboursé' : 'Marqué comme en attente');
       }
     }
   });
@@ -788,6 +821,7 @@
       document.getElementById('mDistance').value = t.distanceKm;
       document.getElementById('mRoundTrip').checked = t.roundTrip;
       document.getElementById('mCount').value = t.count;
+      document.getElementById('mReimbursed').checked = !!t.reimbursed;
     } else {
       var today = new Date().toISOString().slice(0,10);
       document.getElementById('mIsRecurring').checked = false;
@@ -801,6 +835,7 @@
       document.getElementById('mDistance').value = '';
       document.getElementById('mRoundTrip').checked = false;
       document.getElementById('mCount').value = 1;
+      document.getElementById('mReimbursed').checked = false;
     }
     applyRecurringToggle();
     applyMultiStopToggle();
@@ -877,7 +912,8 @@
       rememberRoute(from, to, distanceKm);
     }
 
-    var trip = { id: editingTripId || uid(), vehicleId:vehicleId, associateId:associateId, date:date, dateEnd: isRecurring ? dateEnd : null, comment:comment, from:from, to:to, legs:legs, distanceKm:distanceKm, roundTrip:roundTrip, count:count, totalKm:totalKm };
+    var reimbursed = document.getElementById('mReimbursed').checked;
+    var trip = { id: editingTripId || uid(), vehicleId:vehicleId, associateId:associateId, date:date, dateEnd: isRecurring ? dateEnd : null, comment:comment, from:from, to:to, legs:legs, distanceKm:distanceKm, roundTrip:roundTrip, count:count, totalKm:totalKm, reimbursed:reimbursed };
 
     if(editingTripId){
       var idx = state.trips.findIndex(function(t){ return t.id===editingTripId; });
@@ -1344,6 +1380,12 @@
     var trips = state.trips.filter(function(t){ return new Date(t.date).getFullYear().toString()===y; });
     var grandTotal = trips.reduce(function(s,t){ return s+t.totalKm; },0);
     renderOdometer(document.getElementById('odometerTotal'), grandTotal);
+
+    var reimbursedKm = trips.filter(function(t){ return t.reimbursed; }).reduce(function(s,t){ return s+t.totalKm; },0);
+    var pendingKm = grandTotal - reimbursedKm;
+    document.getElementById('reimburseSummary').innerHTML =
+      '<div class="rs-box"><div class="rs-val" style="color:var(--green);">'+reimbursedKm.toFixed(1)+' km</div><div class="rs-label">Remboursés</div></div>'
+      + '<div class="rs-box"><div class="rs-val" style="color:var(--red);">'+pendingKm.toFixed(1)+' km</div><div class="rs-label">En attente</div></div>';
 
     var byAssociate = {};
     state.associates.forEach(function(a){ byAssociate[a.id] = 0; });
